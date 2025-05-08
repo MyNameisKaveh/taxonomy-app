@@ -1,4 +1,4 @@
-# api/handler.py (تست ۲.۱: ساده‌سازی route اصلی)
+# api/handler.py (تست ۱.۱: تغییر نام route/تابع راهنما)
 
 from flask import Flask, jsonify, request
 import requests
@@ -57,7 +57,7 @@ def get_best_ncbi_suggestion_flexible(common_name, max_ids_to_check=5):
 # تابع کمکی: تصویر ویکی‌پدیا
 # =============================================
 def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=None):
-     # ... (کد کامل و بدون تغییر تابع get_wikipedia_image_url) ...
+    # ... (کد کامل و بدون تغییر تابع get_wikipedia_image_url) ...
     search_candidates = []; clean_scientific_name = None; clean_scientific_name_for_filename = None
     if scientific_name_from_gbif: temp_clean_name = scientific_name_from_gbif.split('(')[0].strip();
     if temp_clean_name: clean_scientific_name = temp_clean_name; search_candidates.append(clean_scientific_name); clean_scientific_name_for_filename = clean_scientific_name.lower().replace(" ", "_")    
@@ -128,30 +128,32 @@ def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=No
         except Exception as e: print(f"[WIKI_IMG] Generic error: {e}"); traceback.print_exc(); continue            
     print(f"[WIKI_IMG] No suitable image URL found."); return None
 
-
 # =============================================
 # Endpoint: پیشنهاد نام علمی (راهنما)
+# ** با نام Route و تابع جدید **
 # =============================================
-@app.route('/api/suggest_name', methods=['GET'])
-def suggest_name_endpoint():
-    # ... (کد کامل و بدون تغییر تابع suggest_name_endpoint) ...
-    common_headers = {'Access-Control-Allow-Origin': '*'}; query = request.args.get('query'); lang = request.args.get('lang', 'en') 
+@app.route('/api/get_suggestion', methods=['GET']) # <-- نام route تغییر کرد
+def scientific_name_suggester(): # <-- نام تابع تغییر کرد
+    """Endpoint برای پیشنهاد نام علمی بر اساس نام رایج."""
+    common_headers = {'Access-Control-Allow-Origin': '*'}
+    query = request.args.get('query')
+    lang = request.args.get('lang', 'en') 
     def make_response(data, status_code): return jsonify(data), status_code, common_headers
     if not query: return make_response({"error": "Query parameter 'query' is required"}, 400)
     if lang != 'en': return make_response({"error": "Currently only English queries are supported."}, 400)
     try:
-        suggestion = get_best_ncbi_suggestion_flexible(query)
+        suggestion = get_best_ncbi_suggestion_flexible(query) 
         if suggestion: return make_response({"query": query, "scientific_name_suggestion": suggestion}, 200)
         else: return make_response({"query": query, "message": f"No scientific name suggestion found for '{query}'."}, 404)
     except Exception as e: print(f"Error in suggest_name_endpoint: {e}"); traceback.print_exc(); return make_response({"error": "An internal error occurred."}, 500)
 
 # =============================================
 # Endpoint: جستجوی اصلی طبقه‌بندی
-# ** فقط route اصلی فعال است **
+# ** با همه route های قبلی **
 # =============================================
 @app.route('/api/handler', methods=['GET', 'POST', 'OPTIONS']) 
-# @app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'OPTIONS']) # <-- کامنت شده
-# @app.route('/<path:path>', methods=['GET', 'POST', 'OPTIONS']) # <-- کامنت شده
+@app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'OPTIONS']) 
+@app.route('/<path:path>', methods=['GET', 'POST', 'OPTIONS']) 
 def main_handler(path=None):
     # ... (کد کامل و بدون تغییر تابع main_handler) ...
     common_headers = {'Access-Control-Allow-Origin': '*'}; 
