@@ -70,61 +70,38 @@ def get_best_ncbi_suggestion_flexible(common_name_en, max_ids_to_check=5):
     except Exception as e: print(f"  Error querying NCBI Entrez: {type(e).__name__} - {e}")
     return scientific_name_suggestion
 
-# --- Helper Function: Wikipedia Image URL (Corrected UnboundLocalError for user_genus_equivalent) ---
+# --- Helper Function: Wikipedia Image URL (Corrected) ---
 def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=None):
-    search_candidates = []
-    clean_scientific_name = None 
-    clean_scientific_name_for_filename = None
-
-    if scientific_name_from_gbif:
-        temp_clean_name = scientific_name_from_gbif.split('(')[0].strip()
-        if temp_clean_name:
-            clean_scientific_name = temp_clean_name
-            search_candidates.append(clean_scientific_name)
-            clean_scientific_name_for_filename = clean_scientific_name.lower().replace(" ", "_")
-    
-    user_name_for_filename = None
-    if species_name_from_user:
-        should_add_user_name = True
-        if clean_scientific_name: 
-            if species_name_from_user.lower() == clean_scientific_name.lower(): should_add_user_name = False
-        if should_add_user_name: search_candidates.append(species_name_from_user)
-        user_name_for_filename = species_name_from_user.lower().replace(" ", "_")
-    
+    # ... (کد کامل و صحیح این تابع از پیام قبلی اینجا قرار می‌گیرد) ...
+    search_candidates=[]; clean_scientific_name=None; clean_scientific_name_for_filename=None
+    if scientific_name_from_gbif: temp_clean_name=scientific_name_from_gbif.split('(')[0].strip();
+    if temp_clean_name: clean_scientific_name=temp_clean_name; search_candidates.append(clean_scientific_name); clean_scientific_name_for_filename=clean_scientific_name.lower().replace(" ","_")
+    user_name_for_filename=None
+    if species_name_from_user: should_add_user_name=True
+    if clean_scientific_name:
+        if species_name_from_user.lower()==clean_scientific_name.lower(): should_add_user_name=False
+    if should_add_user_name: search_candidates.append(species_name_from_user)
+    user_name_for_filename=species_name_from_user.lower().replace(" ","_")
     if not search_candidates: print("[WIKI_IMG] No search terms provided."); return None
     print(f"[WIKI_IMG] Attempting image for candidates: {search_candidates}"); wikipedia.set_lang("en")
     avoid_keywords_in_filename=["map","range","distribution","locator","chart","diagram","logo","icon","disambig","sound","audio","timeline","scale","reconstruction","skeleton","skull","footprint","tracks","scat","phylogeny","cladogram","taxonomy","taxobox"]
-    
     priority_keywords=[]
-    if clean_scientific_name_for_filename: 
-        priority_keywords.append(clean_scientific_name_for_filename)
-        if "_" in clean_scientific_name_for_filename: 
-            priority_keywords.append(clean_scientific_name_for_filename.split("_")[0])
-            
+    if clean_scientific_name_for_filename: priority_keywords.append(clean_scientific_name_for_filename)
+    if "_" in clean_scientific_name_for_filename: priority_keywords.append(clean_scientific_name_for_filename.split("_")[0])
     if user_name_for_filename:
-        if not (clean_scientific_name_for_filename and user_name_for_filename == clean_scientific_name_for_filename):
-            if user_name_for_filename not in priority_keywords: 
-                priority_keywords.append(user_name_for_filename)
-        
-        # --- اصلاح بخش user_genus_equivalent ---
+        if not (clean_scientific_name_for_filename and user_name_for_filename==clean_scientific_name_for_filename):
+            if user_name_for_filename not in priority_keywords: priority_keywords.append(user_name_for_filename)
         if "_" in user_name_for_filename: 
             user_genus_equivalent = user_name_for_filename.split("_")[0] # تعریف فقط اگر لازم بود
             add_user_genus = True
             if clean_scientific_name_for_filename and "_" in clean_scientific_name_for_filename:
-                if user_genus_equivalent == clean_scientific_name_for_filename.split("_")[0]:
-                     add_user_genus = False
-            elif clean_scientific_name_for_filename and user_genus_equivalent == clean_scientific_name_for_filename:
-                 add_user_genus = False
-                 
-            if add_user_genus and user_genus_equivalent not in priority_keywords: 
-                 priority_keywords.append(user_genus_equivalent) # استفاده فقط اگر add_user_genus درست بود
-
-    priority_keywords = list(filter(None, dict.fromkeys(priority_keywords))) 
-    print(f"[WIKI_IMG] Priority keywords for image filename: {priority_keywords}")
-    
-    processed_search_terms = set() 
+                if user_genus_equivalent == clean_scientific_name_for_filename.split("_")[0]: add_user_genus = False
+            elif clean_scientific_name_for_filename and user_genus_equivalent == clean_scientific_name_for_filename: add_user_genus = False
+            if add_user_genus and user_genus_equivalent not in priority_keywords: priority_keywords.append(user_genus_equivalent)
+    priority_keywords=list(filter(None,dict.fromkeys(priority_keywords))); print(f"[WIKI_IMG] Priority keywords for image filename: {priority_keywords}")
+    processed_search_terms=set()
     while search_candidates:
-        term_to_search = search_candidates.pop(0) 
+        term_to_search=search_candidates.pop(0)
         if not term_to_search or term_to_search in processed_search_terms: continue
         processed_search_terms.add(term_to_search); print(f"[WIKI_IMG] Trying Wikipedia search for term: '{term_to_search}'")
         try: 
@@ -142,7 +119,6 @@ def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=No
                 if e.options: new_candidate = e.options[0]
                 if new_candidate not in processed_search_terms and new_candidate not in search_candidates: search_candidates.append(new_candidate); print(f"[WIKI_IMG] Added disambiguation option '{new_candidate}' to search candidates.")
                 continue 
-            
             if wiki_page and wiki_page.images:
                 print(f"[WIKI_IMG] Page '{page_title_found}' images (up to 5): {wiki_page.images[:5]}"); candidate_images_with_scores=[]
                 for img_url in wiki_page.images: 
@@ -167,17 +143,19 @@ def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=No
             elif wiki_page: print(f"[WIKI_IMG] No images listed on Wikipedia page: '{page_title_found}'")
         except wikipedia.exceptions.PageError: print(f"[WIKI_IMG] Wikipedia PageError (likely after search/disambiguation) for term: '{term_to_search}'"); continue 
         except Exception as e: print(f"[WIKI_IMG] Generic error during processing for '{term_to_search}': {str(e)}"); traceback.print_exc(); continue 
-            
     print(f"[WIKI_IMG] No suitable Wikipedia image URL after all attempts."); return None
 
-# --- Endpoint: Suggest Name ---
+# --- Endpoint: Suggest Name (فعال شده) ---
 @app.route('/api/suggest_name', methods=['GET'])
 def suggest_name_endpoint():
     query = request.args.get('query') # انتظار نام انگلیسی
     common_headers = {'Access-Control-Allow-Origin': '*'}
     if not query:
         return jsonify({"error": "Query parameter (English common name) is required"}), 400, common_headers
+    
+    # فراخوانی تابع NCBI برای گرفتن پیشنهاد نام علمی
     suggestion = get_best_ncbi_suggestion_flexible(query)
+
     response_data = {"query": query, "scientific_name_suggestion": suggestion}
     if suggestion:
         print(f"[SUGGEST_API] Suggestion for '{query}': {suggestion}")
@@ -187,7 +165,8 @@ def suggest_name_endpoint():
         response_data["message"] = f"Could not find a scientific name suggestion for '{query}' via NCBI."
         return jsonify(response_data), 404, common_headers
 
-# --- Endpoint: Main Handler (Taxonomy & Image) ---
+
+# --- Endpoint: Main Handler (Taxonomy & Image - بدون تغییر) ---
 @app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'OPTIONS'])
 @app.route('/<path:path>', methods=['GET', 'POST', 'OPTIONS'])
 def main_handler(path=None):
