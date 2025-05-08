@@ -138,3 +138,14 @@ footer a {
 footer a:hover {
     text-decoration: underline;
 }
+
+/* استایل برای پیام‌های اطلاعاتی (مثل گونه پیدا نشد) */
+.info-message {
+    color: #0c5460; /* یک رنگ آبی تیره‌تر برای متن */
+    background-color: #d1ecf1; /* یک پس‌زمینه آبی روشن */
+    border: 1px solid #bee5eb; /* یک حاشیه آبی روشن‌تر */
+    padding: 12px 15px; /* کمی پدینگ بیشتر */
+    border-radius: 4px;
+    text-align: center;
+    margin-top: 20px; /* برای هماهنگی با بقیه بخش‌ها */
+}
