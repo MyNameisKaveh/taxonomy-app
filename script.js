@@ -1,11 +1,11 @@
-const API_BASE_URL = "https://taxonomy-app-ebon.vercel.app/api/handler";
+const API_BASE_URL = "https://taxonomy-app-ebon.vercel.app/api/handler"; // آدرس بک‌اند شما
 
 const speciesNameInput = document.getElementById('speciesNameInput');
 const searchButton = document.getElementById('searchButton');
 const resultsContainer = document.getElementById('resultsContainer');
 const loadingIndicator = document.getElementById('loadingIndicator');
 const errorContainer = document.getElementById('errorContainer');
-const speciesImageContainer = document.getElementById('speciesImageContainer'); // عنصر جدید برای تصویر
+const speciesImageContainer = document.getElementById('speciesImageContainer'); // عنصر برای تصویر
 
 searchButton.addEventListener('click', performSearch);
 speciesNameInput.addEventListener('keypress', function(event) {
@@ -17,11 +17,11 @@ speciesNameInput.addEventListener('keypress', function(event) {
 async function performSearch() {
     const speciesName = speciesNameInput.value.trim();
 
-    resultsContainer.innerHTML = '';
-    errorContainer.innerHTML = '';
-    errorContainer.style.display = 'none';
-    speciesImageContainer.innerHTML = ''; // پاک کردن تصویر قبلی
-    loadingIndicator.style.display = 'block';
+    resultsContainer.innerHTML = ''; 
+    errorContainer.innerHTML = '';   
+    errorContainer.style.display = 'none'; 
+    if (speciesImageContainer) speciesImageContainer.innerHTML = ''; // پاک کردن تصویر قبلی
+    loadingIndicator.style.display = 'block'; 
 
     if (!speciesName) {
         showError("لطفاً نام یک موجود را وارد کنید.");
@@ -33,14 +33,14 @@ async function performSearch() {
         const response = await fetch(apiUrl);
         const data = await response.json();
 
-        loadingIndicator.style.display = 'none'; // مخفی کردن لودینگ بعد از دریافت پاسخ
+        loadingIndicator.style.display = 'none'; 
 
         if (!response.ok) {
             let errorMessage = data.error || data.message || `خطای ناشناخته از سرور (کد: ${response.status})`;
             if (response.status === 404 && data.message && !data.error) {
-                showInfo(data.message);
+                showInfo(data.message); 
             } else {
-                showError(errorMessage);
+                showError(errorMessage); 
             }
         } else {
             displayResults(data);
@@ -53,6 +53,15 @@ async function performSearch() {
 }
 
 function displayResults(data) {
+    // نمایش تصویر اگر imageUrl در پاسخ بک‌اند وجود داشت
+    if (speciesImageContainer) { // ابتدا مطمئن شویم عنصر تصویر در DOM وجود دارد
+        if (data.imageUrl) {
+            speciesImageContainer.innerHTML = `<img src="${data.imageUrl}" alt="${data.scientificName || data.searchedName || 'تصویر موجود'}" style="max-width: 100%; max-height: 350px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">`;
+        } else {
+            speciesImageContainer.innerHTML = '<p>تصویری برای این موجود یافت نشد.</p>';
+        }
+    }
+
     let htmlOutput = '<h2>نتایج طبقه‌بندی:</h2>';
     htmlOutput += '<ul>';
 
@@ -80,80 +89,26 @@ function displayResults(data) {
 
     htmlOutput += '</ul>';
     resultsContainer.innerHTML = htmlOutput;
-    resultsContainer.style.display = 'block';
-    errorContainer.style.display = 'none';
-
-    // اگر usageKey وجود داشت، تصویر را بارگذاری کن
-    if (data.usageKey) {
-        fetchAndDisplayImage(data.usageKey, data.scientificName || speciesNameInput.value);
-    } else {
-        speciesImageContainer.innerHTML = ''; // اگر کلیدی نبود، بخش تصویر را خالی کن
-    }
-}
-
-async function fetchAndDisplayImage(usageKey, altText = "تصویر موجود") {
-    if (!speciesImageContainer) return;
-    speciesImageContainer.innerHTML = '<p>در حال بارگذاری تصویر...</p>';
-
-    try {
-        // آدرس API تصاویر GBIF: https://api.gbif.org/v1/species/{usageKey}/media
-        // limit=1 برای گرفتن فقط اولین تصویر
-        // mediaType=StillImage برای اینکه فقط تصاویر ثابت رو بگیریم (نه ویدیو یا صدا)
-        const imageApiUrl = `https://api.gbif.org/v1/species/${usageKey}/media?limit=1&mediaType=StillImage`;
-        const response = await fetch(imageApiUrl);
-
-        if (!response.ok) {
-            // اگر API تصاویر خطایی برگرداند یا نتیجه‌ای نداشت
-            console.warn(`GBIF Media API for key ${usageKey} returned status ${response.status}`);
-            speciesImageContainer.innerHTML = '<p>تصویری برای این موجود در GBIF یافت نشد.</p>';
-            return;
-        }
-
-        const mediaData = await response.json();
-
-        if (mediaData.results && mediaData.results.length > 0 && mediaData.results[0].identifier) {
-            let imageUrl = mediaData.results[0].identifier;
-            
-            // برخی URL های تصاویر در GBIF ممکن است کامل نباشند یا نیاز به تغییر اندازه داشته باشند
-            // اینجا یک URL تصویر کوچک (thumbnail) یا متوسط رو انتخاب می‌کنیم اگر موجود باشه
-            // یا اگر URL کامل نبود، https به آن اضافه می‌کنیم
-            // این بخش ممکنه نیاز به تنظیم دقیق‌تر بر اساس پاسخ GBIF داشته باشه
-
-            if (mediaData.results[0].references) { // گاهی URL اصلی در references است
-                imageUrl = mediaData.results[0].references;
-            }
-
-            // اگر URL با // شروع میشه، https: رو بهش اضافه کن
-            if (imageUrl.startsWith("//")) {
-                imageUrl = "https:" + imageUrl;
-            }
-            // اگر با http یا https شروع نمیشد، و یک آدرس نسبی بود، ممکنه کار نکنه.
-            // GBIF معمولا URL های کامل برمیگردونه.
-
-            speciesImageContainer.innerHTML = `<img src="${imageUrl}" alt="${altText}" style="max-width: 100%; max-height: 350px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">`;
-        } else {
-            speciesImageContainer.innerHTML = '<p>تصویری برای این موجود در GBIF یافت نشد.</p>';
-        }
-    } catch (error) {
-        console.error("Error fetching or displaying image:", error);
-        speciesImageContainer.innerHTML = '<p>خطا در بارگذاری تصویر.</p>';
-    }
+    resultsContainer.style.display = 'block'; 
+    errorContainer.style.display = 'none'; 
 }
 
 function showError(message) {
     errorContainer.innerHTML = `<p>${message}</p>`;
     errorContainer.style.display = 'block';
-    resultsContainer.innerHTML = '';
-    resultsContainer.style.display = 'none';
-    speciesImageContainer.innerHTML = ''; // پاک کردن تصویر در صورت خطا
+    resultsContainer.innerHTML = ''; 
+    resultsContainer.style.display = 'none'; 
+    if (speciesImageContainer) speciesImageContainer.innerHTML = ''; // پاک کردن تصویر در صورت خطا
     loadingIndicator.style.display = 'none';
 }
 
 function showInfo(message) {
+    // اگر میخواهید پیام اطلاعاتی (مثل گونه پیدا نشد) در بخش نتایج نمایش داده شود
+    // و با استایل متفاوتی (مثلا آبی)
     resultsContainer.innerHTML = `<p class="info-message">${message}</p>`;
-    resultsContainer.style.display = 'block';
+    resultsContainer.style.display = 'block'; 
     errorContainer.innerHTML = '';
     errorContainer.style.display = 'none';
-    speciesImageContainer.innerHTML = ''; // پاک کردن تصویر برای پیام اطلاعاتی
+    if (speciesImageContainer) speciesImageContainer.innerHTML = ''; // پاک کردن تصویر برای پیام اطلاعاتی
     loadingIndicator.style.display = 'none';
 }
