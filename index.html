@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>طبقه‌بندی موجودات</title>
-    <!-- لینک به فایل CSS (بعداً ایجاد می‌کنیم) -->
+    <!-- لینک به فایل CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <header>
             <h1>جستجوی طبقه‌بندی موجودات</h1>
-            <p>نام علمی یا رایج یک موجود را وارد کنید و اطلاعات طبقه‌بندی آن را مشاهده نمایید.</p>
+            <p>نام علمی یا رایج یک موجود را وارد کنید و اطلاعات طبقه‌بندی و تصویر آن را مشاهده نمایید.</p>
         </header>
 
         <main>
@@ -22,6 +22,11 @@
 
             <div id="loadingIndicator" style="display: none;">
                 <p>در حال بارگذاری اطلاعات...</p>
+            </div>
+
+            <!-- محل نمایش تصویر موجود -->
+            <div id="speciesImageContainer" style="text-align: center; margin-bottom: 20px;">
+                <!-- تصویر اینجا توسط جاوااسکریپت بارگذاری می‌شود -->
             </div>
 
             <div id="resultsContainer">
@@ -38,7 +43,7 @@
         </footer>
     </div>
 
-    <!-- لینک به فایل جاوااسکریپت (بعداً ایجاد می‌کنیم) -->
+    <!-- لینک به فایل جاوااسکریپت -->
     <script src="script.js"></script>
 </body>
 </html>
