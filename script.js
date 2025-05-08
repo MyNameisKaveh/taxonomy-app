@@ -1,12 +1,21 @@
-const API_BASE_URL = "https://taxonomy-app-ebon.vercel.app/api/handler"; // آدرس بک‌اند شما
+// URL های API بک‌اند
+const API_BASE_URL = "https://taxonomy-app-ebon.vercel.app/api/handler"; // برای جستجوی اصلی
+const API_SUGGEST_URL = "https://taxonomy-app-ebon.vercel.app/api/suggest_name"; // برای راهنمای نام
 
+// عناصر HTML اصلی
 const speciesNameInput = document.getElementById('speciesNameInput');
 const searchButton = document.getElementById('searchButton');
 const resultsContainer = document.getElementById('resultsContainer');
-const loadingIndicator = document.getElementById('loadingIndicator'); // برای لودینگ کلی
+const loadingIndicator = document.getElementById('loadingIndicator');
 const errorContainer = document.getElementById('errorContainer');
-const speciesImageContainer = document.getElementById('speciesImageContainer'); // برای تصویر و اسپینر تصویر
+const speciesImageContainer = document.getElementById('speciesImageContainer');
 
+// عناصر HTML راهنما
+const commonNameInput = document.getElementById('commonNameInput');
+const suggestButton = document.getElementById('suggestButton');
+const suggestionResult = document.getElementById('suggestionResult');
+
+// Event Listeners اصلی
 searchButton.addEventListener('click', performSearch);
 speciesNameInput.addEventListener('keypress', function(event) {
     if (event.key === 'Enter') {
@@ -14,60 +23,150 @@ speciesNameInput.addEventListener('keypress', function(event) {
     }
 });
 
+// Event Listeners راهنما
+suggestButton.addEventListener('click', getScientificNameSuggestion);
+commonNameInput.addEventListener('keypress', function(event) {
+    if (event.key === 'Enter') {
+        getScientificNameSuggestion();
+    }
+});
+
+// =============================================
+// تابع برای بخش راهنمای نام علمی
+// =============================================
+async function getScientificNameSuggestion() {
+    const commonName = commonNameInput.value.trim();
+    if (!suggestionResult) return;
+
+    suggestionResult.innerHTML = '<div class="loader" style="width: 25px; height: 25px; border-width: 3px; border-top-color: #5dade2;"></div>'; // اسپینر کوچکتر با رنگ آبی راهنما
+    suggestionResult.classList.remove('error-message'); 
+
+    if (!commonName) {
+        suggestionResult.innerHTML = '<span class="error-message">لطفاً نام رایج (انگلیسی) را وارد کنید.</span>';
+        return;
+    }
+
+    // استفاده از URL کامل بک‌اند
+    const suggestApiUrl = `${API_SUGGEST_URL}?query=${encodeURIComponent(commonName)}&lang=en`; 
+
+    try {
+        const response = await fetch(suggestApiUrl);
+        const data = await response.json();
+
+        if (!response.ok) {
+            suggestionResult.innerHTML = `<span class="error-message">${data.message || data.error || 'خطایی در دریافت پیشنهاد رخ داد.'}</span>`;
+        } else if (data.scientific_name_suggestion) {
+            const suggestion = data.scientific_name_suggestion;
+            suggestionResult.innerHTML = `
+                <span>پیشنهاد: </span>
+                <strong id="suggestedName" style="margin: 0 5px;">${suggestion}</strong>
+                <button class="copy-button" onclick="copySuggestionToSearch()" title="کپی در کادر جستجوی اصلی">⬇️ کپی به جستجو</button>
+                <button class="copy-button" onclick="copyToClipboard('${suggestion}')" title="کپی در کلیپ‌بورد">📋 کپی</button>
+            `;
+        } else {
+            // این حالت اگر بک‌اند 404 بدهد اتفاق نمی‌افتد، بلکه در !response.ok مدیریت می‌شود
+             suggestionResult.innerHTML = `<span class="error-message">پیشنهادی یافت نشد.</span>`;
+        }
+
+    } catch (error) {
+        console.error("Suggestion Fetch Error:", error);
+        suggestionResult.innerHTML = `<span class="error-message">خطا در ارتباط با سرور راهنما.</span>`;
+    }
+}
+
+// تابع برای کپی کردن پیشنهاد به فیلد جستجوی اصلی
+function copySuggestionToSearch() {
+    const suggestedNameElement = document.getElementById('suggestedName');
+    if (suggestedNameElement && speciesNameInput) {
+        speciesNameInput.value = suggestedNameElement.textContent || suggestedNameElement.innerText; 
+        speciesNameInput.focus(); 
+        // اسکرول به بخش جستجوی اصلی
+        const searchBoxElement = document.querySelector('.search-box');
+        if (searchBoxElement) {
+             searchBoxElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+}
+
+// تابع برای کپی کردن متن به کلیپ‌بورد
+function copyToClipboard(text) {
+    if (!navigator.clipboard) {
+        // Fallback برای مرورگرهای قدیمی‌تر یا محیط‌های ناامن (http)
+        try {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed"; // Prevent scrolling to bottom of page in MS Edge.
+            textArea.style.opacity = "0";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            alert(`"${text}"\nبه کلیپ‌بورد کپی شد! (fallback)`);
+        } catch (err) {
+             alert('مرورگر شما از کپی خودکار پشتیبانی نمی‌کند. لطفاً دستی کپی کنید.');
+        }
+        return;
+    }
+    navigator.clipboard.writeText(text).then(function() {
+        alert(`"${text}"\nبه کلیپ‌بورد کپی شد!`);
+    }, function(err) {
+        console.error('Clipboard copy failed: ', err);
+        alert('خطا در کپی متن. ممکن است نیاز به اجازه (permission) باشد.');
+    });
+}
+
+
+// =============================================
+// توابع برای بخش جستجوی اصلی (مثل قبل)
+// =============================================
 async function performSearch() {
     const speciesName = speciesNameInput.value.trim();
 
-    // پاک‌سازی اولیه
     resultsContainer.innerHTML = ''; 
     errorContainer.innerHTML = '';   
     errorContainer.style.display = 'none'; 
-    if (speciesImageContainer) {
-        speciesImageContainer.innerHTML = ''; // پاک کردن تصویر یا spinner قبلی
-    }
-    loadingIndicator.style.display = 'block'; // نمایش نشانگر بارگذاری کلی
+    if (speciesImageContainer) speciesImageContainer.innerHTML = ''; 
+    loadingIndicator.style.display = 'block'; 
 
     if (!speciesName) {
-        showError("لطفاً نام یک موجود را وارد کنید."); // loadingIndicator در showError مخفی می‌شود
+        showError("لطفاً نام علمی دقیق را وارد کنید.");
         return;
     }
 
     try {
+        // استفاده از URL کامل بک‌اند
         const apiUrl = `${API_BASE_URL}?name=${encodeURIComponent(speciesName)}`;
         const response = await fetch(apiUrl);
         const data = await response.json();
 
-        loadingIndicator.style.display = 'none'; // مخفی کردن نشانگر بارگذاری کلی بعد از دریافت پاسخ
+        loadingIndicator.style.display = 'none'; 
 
         if (!response.ok) {
             let errorMessage = data.error || data.message || `خطای ناشناخته از سرور (کد: ${response.status})`;
-            if (response.status === 404 && data.message && !data.error) {
-                showInfo(data.message); 
-            } else {
-                showError(errorMessage); 
-            }
+            // اینجا دیگر نیازی به تفکیک خطای 404 برای showInfo نیست چون جستجوی اصلی انتظار نام علمی دارد
+            showError(errorMessage); 
         } else {
-            // اگر پاسخ موفقیت آمیز بود و قرار است تصویری نمایش داده شود، ابتدا اسپینر تصویر را نمایش بده
+            // قبل از نمایش نتایج، اگر قرار است تصویری لود شود، spinner تصویر را نمایش بده
             if (data.imageUrl && speciesImageContainer) {
-                speciesImageContainer.innerHTML = '<div class="loader"></div>'; // نمایش spinner برای تصویر
-            } else if (speciesImageContainer) { // اگر تصویری در کار نیست، بخش تصویر را خالی کن
+                speciesImageContainer.innerHTML = '<div class="loader"></div>'; 
+            } else if (speciesImageContainer) {
                  speciesImageContainer.innerHTML = '';
             }
-            displayResults(data); // نتایج متنی و تصویر اصلی (اگر بود) در این تابع مدیریت می‌شوند
+            displayResults(data); 
         }
 
     } catch (error) {
-        showError(`خطا در برقراری ارتباط با سرور: ${error.message}`); // loadingIndicator در showError مخفی می‌شود
+        showError(`خطا در برقراری ارتباط با سرور: ${error.message}`); 
         console.error("Fetch Error:", error);
     }
 }
 
 function displayResults(data) {
-    // بخش تصویر توسط قسمت بالایی در performSearch (نمایش اسپینر) و اینجا (جایگزینی با تصویر) مدیریت می‌شود
     if (speciesImageContainer) {
         if (data.imageUrl) {
             const img = new Image();
             img.onload = function() {
-                // وقتی تصویر کاملا لود شد، اسپینر را پاک کرده و تصویر را جایگزین کن
                 speciesImageContainer.innerHTML = ''; 
                 speciesImageContainer.appendChild(img);
             };
@@ -81,17 +180,14 @@ function displayResults(data) {
             img.style.borderRadius = "8px";
             img.style.boxShadow = "0 4px 8px rgba(0,0,0,0.1)";
         } else {
-            // اگر از بک‌اند imageUrl نیامد، پیام مناسب نمایش بده
-            // (این حالت توسط بخش بالایی در performSearch هم پوشش داده میشه اگر imageUrl نباشه)
-            if (speciesImageContainer.innerHTML.includes('loader')) { // اگر اسپینر در حال نمایش بود
+             if (speciesImageContainer.innerHTML.includes('loader')) {
                  speciesImageContainer.innerHTML = '<p>تصویری برای این موجود یافت نشد.</p>';
-            } else if (!data.imageUrl) { // اگر اصلا imageUrl نبود و اسپینری هم نمایش داده نشده بود
+            } else if (!data.imageUrl && data.scientificName) { // فقط اگر نتیجه‌ای بود ولی تصویر نداشت
                  speciesImageContainer.innerHTML = '<p>تصویری برای این موجود یافت نشد.</p>';
             }
         }
     }
 
-    // نمایش نتایج متنی طبقه‌بندی
     let htmlOutput = '<h2>نتایج طبقه‌بندی:</h2>';
     htmlOutput += '<ul>';
 
@@ -116,6 +212,11 @@ function displayResults(data) {
             htmlOutput += `<li><strong>${item.label}:</strong> ${data[item.key]}</li>`;
         }
     });
+    
+    // اگر پیام خطای GBIF در کنار تصویر آمده بود (حالت خاص در بک‌اند)
+    if(data.gbifLookupMessage){
+        htmlOutput += `<li><strong>نکته GBIF:</strong> ${data.gbifLookupMessage}</li>`;
+    }
 
     htmlOutput += '</ul>';
     resultsContainer.innerHTML = htmlOutput;
@@ -123,20 +224,25 @@ function displayResults(data) {
     errorContainer.style.display = 'none'; 
 }
 
-function showError(message) {
+function showError(message) { // برای خطاهای جستجوی اصلی
     errorContainer.innerHTML = `<p>${message}</p>`;
     errorContainer.style.display = 'block';
     resultsContainer.innerHTML = ''; 
     resultsContainer.style.display = 'none'; 
-    if (speciesImageContainer) speciesImageContainer.innerHTML = ''; // پاک کردن تصویر/اسپینر
+    if (speciesImageContainer) speciesImageContainer.innerHTML = ''; 
     loadingIndicator.style.display = 'none';
 }
 
-function showInfo(message) {
+// تابع showInfo دیگر برای بخش جستجوی اصلی استفاده نمی‌شود
+// چون خطای 404 از GBIF را مستقیما به showError می‌فرستیم
+
+/* 
+function showInfo(message) { // این تابع ممکن است دیگر لازم نباشد
     resultsContainer.innerHTML = `<p class="info-message">${message}</p>`;
     resultsContainer.style.display = 'block'; 
     errorContainer.innerHTML = '';
     errorContainer.style.display = 'none';
-    if (speciesImageContainer) speciesImageContainer.innerHTML = ''; // پاک کردن تصویر/اسپینر
+    if (speciesImageContainer) speciesImageContainer.innerHTML = ''; 
     loadingIndicator.style.display = 'none';
-}
+} 
+*/
