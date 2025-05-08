@@ -6,98 +6,140 @@ import wikipedia # کتابخانه جدید برای کار با ویکی‌پ�
 app = Flask(__name__)
 GBIF_API_URL_MATCH = "https://api.gbif.org/v1/species/match"
 
+# تابع به‌روز شده برای گرفتن تصویر از ویکی‌پدیا
 def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=None):
-    """
-    سعی می‌کند URL تصویر اصلی گونه را از ویکی‌پدیای انگلیسی پیدا کند.
-    """
     search_candidates = []
+    clean_scientific_name_for_filename = None
+
     if scientific_name_from_gbif:
-        # نام علمی از GBIF (بدون نویسنده و سال) اولویت دارد
         clean_scientific_name = scientific_name_from_gbif.split('(')[0].strip()
         if clean_scientific_name:
             search_candidates.append(clean_scientific_name)
+            clean_scientific_name_for_filename = clean_scientific_name.lower().replace(" ", "_")
     
-    # نام اولیه که کاربر وارد کرده
+    user_name_for_filename = None
     if species_name_from_user:
-        search_candidates.append(species_name_from_user)
+        # اگر نام کاربر با نام علمی یکی بود، دوباره اضافه نکن
+        if not (clean_scientific_name and species_name_from_user.lower() == clean_scientific_name.lower()):
+            search_candidates.append(species_name_from_user)
+        user_name_for_filename = species_name_from_user.lower().replace(" ", "_")
     
-    # اگر هیچ نامی برای جستجو نبود
     if not search_candidates:
-        print("No search terms provided for Wikipedia image search.")
+        print("[WIKI_IMG] No search terms provided.")
         return None
 
-    print(f"[WIKI_IMG] Attempting to find image for candidates: {search_candidates}")
-    wikipedia.set_lang("en") # زبان را یکبار در ابتدا تنظیم می‌کنیم
+    print(f"[WIKI_IMG] Attempting image for candidates: {search_candidates}")
+    wikipedia.set_lang("en")
 
-    for term_to_search in search_candidates:
-        if not term_to_search:
+    avoid_keywords_in_filename = ["map", "range", "distribution", "locator", "chart", "diagram", "logo", "icon", "disambig", "sound", "audio", "timeline", "scale", "reconstruction", "skeleton", "skull", "footprint", "tracks", "scat", "phylogeny", "cladogram", "taxonomy", "taxobox"]
+    
+    priority_keywords = []
+    if clean_scientific_name_for_filename:
+        priority_keywords.append(clean_scientific_name_for_filename)
+        if "_" in clean_scientific_name_for_filename: # اضافه کردن بخش جنس به تنهایی
+            priority_keywords.append(clean_scientific_name_for_filename.split("_")[0])
+            
+    if user_name_for_filename and user_name_for_filename not in priority_keywords:
+        priority_keywords.append(user_name_for_filename)
+        if "_" in user_name_for_filename: # اگر نام کاربر چند کلمه‌ای بود
+             priority_keywords.append(user_name_for_filename.split("_")[0])
+
+
+    priority_keywords = list(filter(None, dict.fromkeys(priority_keywords))) # حذف تکراری و None
+    print(f"[WIKI_IMG] Priority keywords for image filename: {priority_keywords}")
+
+    processed_search_terms = set() # برای جلوگیری از جستجوی تکراری یک عبارت
+
+    while search_candidates:
+        term_to_search = search_candidates.pop(0) # اولین کاندید رو بگیر و از لیست حذف کن
+        if not term_to_search or term_to_search in processed_search_terms:
             continue
+        processed_search_terms.add(term_to_search)
         
         print(f"[WIKI_IMG] Trying Wikipedia search for term: '{term_to_search}'")
         try:
-            # ابتدا سعی می‌کنیم مستقیماً صفحه را با نام بگیریم (auto_suggest=True به پیدا کردن کمک می‌کند)
+            wiki_page = None
             try:
                 wiki_page = wikipedia.page(term_to_search, auto_suggest=True, redirect=True)
-                print(f"[WIKI_IMG] Found page directly: '{wiki_page.title}' for term '{term_to_search}'")
+                print(f"[WIKI_IMG] Found page directly: '{wiki_page.title}' for '{term_to_search}'")
             except wikipedia.exceptions.PageError:
-                # اگر مستقیماً پیدا نشد، از search استفاده می‌کنیم
-                print(f"[WIKI_IMG] Page not found directly for '{term_to_search}'. Using wikipedia.search().")
+                print(f"[WIKI_IMG] Page not found directly for '{term_to_search}'. Trying wikipedia.search().")
                 search_results = wikipedia.search(term_to_search, results=1)
                 if not search_results:
                     print(f"[WIKI_IMG] No search results in Wikipedia for: '{term_to_search}'")
-                    continue # اگر جستجو هم نتیجه‌ای نداشت، سراغ عبارت بعدی برو
-                
+                    continue
                 page_title_to_get = search_results[0]
-                print(f"[WIKI_IMG] Found page via search: '{page_title_to_get}' for term '{term_to_search}'")
-                wiki_page = wikipedia.page(page_title_to_get, auto_suggest=False, redirect=True) # اینجا دیگه auto_suggest لازم نیست
-
-            # حالا که صفحه را داریم، تصاویر را بررسی می‌کنیم
-            if wiki_page.images:
-                print(f"[WIKI_IMG] Images found on page '{wiki_page.title}': (showing up to 5) {wiki_page.images[:5]}")
+                if page_title_to_get in processed_search_terms: # اگر این صفحه قبلا پردازش شده
+                    print(f"[WIKI_IMG] Page '{page_title_to_get}' already processed, skipping.")
+                    continue
+                print(f"[WIKI_IMG] Found page via search: '{page_title_to_get}' for '{term_to_search}'")
+                wiki_page = wikipedia.page(page_title_to_get, auto_suggest=False, redirect=True)
+            
+            if wiki_page and wiki_page.images:
+                print(f"[WIKI_IMG] Page '{wiki_page.title}' images (up to 5): {wiki_page.images[:5]}")
+                
+                candidate_images_with_scores = []
                 for img_url in wiki_page.images:
-                    if img_url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.svg')):
-                        # اطمینان از اینکه URL کامل است
-                        if img_url.startswith("//"):
-                            img_url = "https:" + img_url
-                        # کتابخانه wikipedia معمولا URL های کامل برمی‌گردونه
-                        print(f"[WIKI_IMG] Suitable image URL found: {img_url}")
-                        return img_url
-                print(f"[WIKI_IMG] No direct image URL with common extension found in page images for: '{wiki_page.title}'")
-            else:
+                    img_url_lower = img_url.lower()
+                    if not any(ext in img_url_lower for ext in ['.png', '.jpg', '.jpeg']): # .gif و .svg رو فعلا حذف کردم برای سادگی
+                        continue
+                    if any(keyword in img_url_lower for keyword in avoid_keywords_in_filename):
+                        continue
+                    
+                    score = 0
+                    # امتیاز بر اساس کلمات کلیدی اولویت‌دار
+                    for pk_word in priority_keywords:
+                        if pk_word in img_url_lower:
+                            score += 5 # امتیاز بیشتر برای کلمه کلیدی دقیق
+                            # اگر کلمه کلیدی در ابتدای نام فایل باشد (بعد از آخرین /)
+                            filename_part = img_url_lower.split('/')[-1]
+                            if filename_part.startswith(pk_word):
+                                score += 3
+
+                    # امتیاز کمتر برای svg اگر تصاویر دیگر هم هستند
+                    if img_url_lower.endswith('.svg'):
+                        score -= 1
+                    
+                    candidate_images_with_scores.append({'url': img_url, 'score': score})
+                
+                if not candidate_images_with_scores:
+                    print(f"[WIKI_IMG] No images passed filter for '{wiki_page.title}'")
+                    continue
+
+                # مرتب‌سازی تصاویر بر اساس امتیاز (بیشترین امتیاز اول)
+                sorted_images = sorted(candidate_images_with_scores, key=lambda x: x['score'], reverse=True)
+                print(f"[WIKI_IMG] Sorted suitable images (top 3): {sorted_images[:3]}")
+
+                best_image_url = sorted_images[0]['url']
+                if best_image_url.startswith("//"): best_image_url = "https:" + best_image_url
+                print(f"[WIKI_IMG] Best image found: {best_image_url} with score {sorted_images[0]['score']}")
+                return best_image_url
+
+            elif wiki_page:
                 print(f"[WIKI_IMG] No images listed on Wikipedia page: '{wiki_page.title}'")
             
         except wikipedia.exceptions.DisambiguationError as e:
-            print(f"[WIKI_IMG] Wikipedia disambiguation error for '{term_to_search}'. Options (up to 3): {e.options[:3]}")
+            print(f"[WIKI_IMG] Disambiguation for '{term_to_search}'. Options: {e.options[:3]}")
             if e.options:
-                try:
-                    # سعی می‌کنیم اولین گزینه از صفحه ابهام‌زدایی را استفاده کنیم
-                    disambiguated_page_title = e.options[0]
-                    print(f"[WIKI_IMG] Trying first disambiguation option: '{disambiguated_page_title}'")
-                    wiki_page = wikipedia.page(disambiguated_page_title, auto_suggest=False, redirect=True)
-                    if wiki_page.images:
-                        print(f"[WIKI_IMG] Images found on disambiguated page '{wiki_page.title}': (up to 5) {wiki_page.images[:5]}")
-                        for img_url in wiki_page.images:
-                            if img_url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.svg')):
-                                if img_url.startswith("//"): img_url = "https:" + img_url
-                                print(f"[WIKI_IMG] Suitable image URL from disambiguated page: {img_url}")
-                                return img_url
-                        print(f"[WIKI_IMG] No direct image URL on disambiguated page images for: '{wiki_page.title}'")
-                    else:
-                        print(f"[WIKI_IMG] No images on disambiguated Wikipedia page: '{wiki_page.title}'")
-                except Exception as de:
-                    print(f"[WIKI_IMG] Error processing disambiguation option '{e.options[0]}': {de}")
-            continue # اگر در ابهام‌زدایی موفق نبودیم، سراغ کاندید بعدی میریم
-        except wikipedia.exceptions.PageError: # این خطا ممکنه بعد از search هم رخ بده اگر عنوان نامعتبر باشه
-             print(f"[WIKI_IMG] Wikipedia PageError (likely after search) for term: '{term_to_search}'")
+                # اولین گزینه ابهام‌زدایی رو به انتهای لیست کاندیدها اضافه می‌کنیم اگر قبلا نبوده
+                new_candidate = e.options[0]
+                if new_candidate not in processed_search_terms and new_candidate not in search_candidates:
+                    search_candidates.append(new_candidate)
+                    print(f"[WIKI_IMG] Added disambiguation option '{new_candidate}' to search candidates.")
+            continue # ادامه با کاندید بعدی یا گزینه ابهام‌زدایی
+        except wikipedia.exceptions.PageError:
+             print(f"[WIKI_IMG] Wikipedia PageError (likely after search or disambiguation) for term: '{term_to_search}'")
              continue
         except Exception as e:
-            print(f"[WIKI_IMG] Generic error fetching Wikipedia image for '{term_to_search}': {str(e)}")
-            # traceback.print_exc() # برای دیباگ بیشتر در لاگ Vercel می‌تونید اینو فعال کنید
+            print(f"[WIKI_IMG] Generic error for '{term_to_search}': {str(e)}")
+            traceback.print_exc() # چاپ کامل خطا برای دیباگ
             continue
             
-    print(f"[WIKI_IMG] Could not find any suitable Wikipedia image URL after trying all candidates: {search_candidates}")
+    print(f"[WIKI_IMG] No suitable Wikipedia image URL after all attempts for initial candidates.")
     return None
 
+# --- تابع main_handler و بقیه کدها مثل قبل باقی می‌ماند ---
+# (همان کدی که در پیام قبلی برای main_handler و import ها دادم)
 
 @app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'OPTIONS'])
 @app.route('/<path:path>', methods=['GET', 'POST', 'OPTIONS'])
@@ -105,7 +147,6 @@ def main_handler(path=None):
     common_headers = {'Access-Control-Allow-Origin': '*'}
 
     if request.method == 'OPTIONS':
-        # ... (کد CORS مثل قبل) ...
         cors_headers = {**common_headers, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '3600'}
         return ('', 204, cors_headers)
 
@@ -114,25 +155,25 @@ def main_handler(path=None):
         species_name_query = request.args.get('name')
     elif request.method == 'POST':
         try:
-            data_post = request.get_json() # تغییر نام متغیر برای جلوگیری از تداخل با data از GBIF
+            data_post = request.get_json()
             if data_post: species_name_query = data_post.get('name')
             else: return jsonify({"error": "درخواست نامعتبر: بدنه JSON خالی است یا قابل خواندن نیست."}), 400, common_headers
-        except Exception as e_post: # تغییر نام متغیر خطا
+        except Exception as e_post:
             print(f"Error parsing JSON body: {str(e_post)}\n{traceback.format_exc()}")
             return jsonify({"error": f"خطا در پردازش درخواست: {str(e_post)}"}), 400, common_headers
 
     if not species_name_query:
         return jsonify({"error": "پارامتر 'name' (در آدرس یا بدنه JSON) مورد نیاز است."}), 400, common_headers
 
-    params_gbif = {"name": species_name_query, "verbose": "true"} # تغییر نام متغیر
+    params_gbif = {"name": species_name_query, "verbose": "true"}
     classification_data = {}
     gbif_error_message = None
-    gbif_scientific_name = None # برای ارسال به تابع تصویر
+    gbif_scientific_name = None
 
     try:
-        api_response_gbif = requests.get(GBIF_API_URL_MATCH, params=params_gbif, timeout=10) # تغییر نام متغیر
+        api_response_gbif = requests.get(GBIF_API_URL_MATCH, params=params_gbif, timeout=10)
         api_response_gbif.raise_for_status()
-        data_gbif = api_response_gbif.json() # تغییر نام متغیر
+        data_gbif = api_response_gbif.json()
 
         if not data_gbif or data_gbif.get("matchType") == "NONE" or data_gbif.get("confidence", 0) < 30:
             gbif_error_message = f"موجودی با نام '{species_name_query}' در GBIF پیدا نشد یا نتیجه با اطمینان کافی نبود."
@@ -152,21 +193,22 @@ def main_handler(path=None):
     except requests.exceptions.Timeout:
         gbif_error_message = "خطا: زمان پاسخگویی از سرور GBIF بیش از حد طول کشید."
         print(f"[GBIF_ERR] Timeout for: {species_name_query}")
-    except requests.exceptions.HTTPError as http_err_gbif: # تغییر نام متغیر
+    except requests.exceptions.HTTPError as http_err_gbif:
         gbif_error_message = f"خطا از سرور GBIF: {http_err_gbif}"
         try:
-            gbif_error_details = api_response_gbif.json() # تغییر نام متغیر
+            gbif_error_details = api_response_gbif.json()
             gbif_error_message += f" - پیام GBIF: {gbif_error_details.get('message', api_response_gbif.text[:100])}"
         except: pass
         print(f"[GBIF_ERR] HTTPError: {gbif_error_message}")
-    except requests.exceptions.RequestException as e_gbif_req: # تغییر نام متغیر
+    except requests.exceptions.RequestException as e_gbif_req:
         gbif_error_message = f"خطا در ارتباط با سرور GBIF: {str(e_gbif_req)}"
         print(f"[GBIF_ERR] RequestException: {str(e_gbif_req)}")
-    except Exception as e_gbif_generic: # تغییر نام متغیر
+    except Exception as e_gbif_generic:
         gbif_error_message = "یک خطای پیش‌بینی نشده داخلی در ارتباط با GBIF رخ داده است."
         print(f"[GBIF_ERR] Generic Error: {str(e_gbif_generic)}")
+        traceback.print_exc()
 
-    # تلاش برای گرفتن تصویر از ویکی‌پدیا
+
     wiki_image_url = get_wikipedia_image_url(species_name_query, gbif_scientific_name)
     
     if wiki_image_url:
@@ -175,9 +217,8 @@ def main_handler(path=None):
     final_data = {k: v for k, v in classification_data.items() if v is not None}
 
     if gbif_error_message and not final_data.get("scientificName"): 
-        # اگر خطای GBIF داشتیم و هیچ اطلاعاتی هم از GBIF نگرفتیم
-        if final_data.get("imageUrl"): # اما تصویر از ویکی پیدا کردیم
-             return jsonify({"message": gbif_error_message, **final_data}), 200, common_headers # با کد 200 چون تصویر داریم
+        if final_data.get("imageUrl"):
+             return jsonify({"message": gbif_error_message, **final_data}), 200, common_headers
         return jsonify({"message": gbif_error_message, "searchedName": species_name_query}), 404, common_headers
     
     return jsonify(final_data), 200, common_headers
