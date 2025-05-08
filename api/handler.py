@@ -4,17 +4,16 @@ from flask import Flask, jsonify, request
 import requests
 import traceback
 import wikipedia 
-from .utils import get_best_ncbi_suggestion_flexible # ایمپورت از فایل utils
+# دیگر نیازی به ایمپورت از utils نیست چون تابع راهنما حذف شده
 
 app = Flask(__name__)
 GBIF_API_URL_MATCH = "https://api.gbif.org/v1/species/match"
 
 # =============================================
 # تابع کمکی برای گرفتن تصویر از ویکی‌پدیا
+# (این تابع بدون تغییر باقی می‌ماند)
 # =============================================
 def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=None):
-    # ... (کد کامل و صحیح تابع get_wikipedia_image_url که قبلا داشتیم و تصویر درست رو برمی‌گردوند) ...
-    # ... (مطمئن شو کد کامل این تابع اینجا هست) ...
     search_candidates = []
     clean_scientific_name = None 
     clean_scientific_name_for_filename = None
@@ -91,7 +90,7 @@ def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=No
                             score += 5 
                             filename_part = img_url_lower.split('/')[-1]
                             if filename_part.startswith(pk_word): score += 3
-                            if pk_word == clean_scientific_name_for_filename and pk_word in filename_part : score +=5
+                            if clean_scientific_name_for_filename and pk_word == clean_scientific_name_for_filename and pk_word in filename_part : score +=5 # بررسی مجدد شرط pk_word == clean_scientific_name_for_filename
                     if img_url_lower.endswith('.svg'): score -= 1
                     candidate_images_with_scores.append({'url': img_url, 'score': score})                
                 if not candidate_images_with_scores: print(f"[WIKI_IMG] No images passed filter for '{wiki_page.title}'"); continue
@@ -118,36 +117,12 @@ def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=No
     return None
 
 # =============================================
-# Endpoint جدید برای راهنمای نام علمی
-# =============================================
-@app.route('/api/suggest_name', methods=['GET'])
-def suggest_name_endpoint():
-    """Endpoint برای پیشنهاد نام علمی بر اساس نام رایج."""
-    common_headers = {'Access-Control-Allow-Origin': '*'}
-    query = request.args.get('query')
-    lang = request.args.get('lang', 'en') # فعلا فقط انگلیسی 'en' پشتیبانی می‌شود
-
-    if not query:
-        return jsonify({"error": "Query parameter 'query' is required"}), 400, common_headers
-    if lang != 'en':
-         return jsonify({"error": "Currently only English queries are supported."}), 400, common_headers
-
-    # فراخوانی تابع راهنما از utils.py
-    suggestion = get_best_ncbi_suggestion_flexible(query)
-
-    if suggestion:
-        return jsonify({"query": query, "scientific_name_suggestion": suggestion}), 200, common_headers
-    else:
-        # اگر در utils.py برای خطاها None برمیگردد، اینجا 404 میدهیم
-        return jsonify({"query": query, "message": f"No scientific name suggestion found for '{query}'."}), 404, common_headers
-
-
-# =============================================
 # Endpoint اصلی برای جستجوی طبقه‌بندی
+# (تابع suggest_name_endpoint از اینجا حذف شده است)
 # =============================================
-@app.route('/api/handler', methods=['GET', 'POST', 'OPTIONS']) # <-- تغییر مسیر اصلی به /api/handler
-@app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'OPTIONS']) # <-- route ریشه هم به همین تابع بره
-@app.route('/<path:path>', methods=['GET', 'POST', 'OPTIONS']) # <-- بقیه مسیرها هم (برای سازگاری)
+@app.route('/api/handler', methods=['GET', 'POST', 'OPTIONS']) 
+@app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'OPTIONS']) 
+@app.route('/<path:path>', methods=['GET', 'POST', 'OPTIONS']) 
 def main_handler(path=None):
     """Endpoint اصلی برای جستجوی طبقه‌بندی و تصویر."""
     common_headers = {'Access-Control-Allow-Origin': '*'}
@@ -169,8 +144,6 @@ def main_handler(path=None):
             return jsonify({"error": f"خطا در پردازش درخواست: {str(e_post)}"}), 400, common_headers
 
     if not species_name_query:
-         # اگر نامی نرسیده، شاید درخواست به ریشه بوده، یک صفحه پیش‌فرض یا راهنما نشان دهیم؟
-         # فعلا همان خطای قبلی را میدهیم.
         return jsonify({"error": "پارامتر 'name' (در آدرس یا بدنه JSON) مورد نیاز است."}), 400, common_headers
 
     # --- جستجو در GBIF ---
