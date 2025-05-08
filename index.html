@@ -15,6 +15,40 @@
         </header>
 
         <main>
+                    <main>
+            <!-- ================================== -->
+            <!-- ===== بخش جدید: راهنمای نام علمی ===== -->
+            <!-- ================================== -->
+            <div class="suggestion-section">
+                <h2>کمک برای یافتن نام علمی</h2>
+                <p>اگر نام علمی دقیق را نمی‌دانید، نام رایج (انگلیسی) را اینجا وارد کنید تا پیشنهاد دریافت کنید.</p>
+                <div class="suggestion-box">
+                    <input type="text" id="commonNameInput" placeholder="مثلاً: Lion, Cat, Rose">
+                    <button id="suggestButton">یافتن نام علمی</button>
+                </div>
+                <div id="suggestionResult" class="suggestion-result-container">
+                    <!-- پیشنهاد نام علمی یا پیام‌ها اینجا نمایش داده می‌شود -->
+                </div>
+            </div>
+            <!-- ===== پایان بخش راهنمای نام علمی ===== -->
+
+            <hr class="section-divider"> <!-- خط جداکننده -->
+
+            <!-- بخش جستجوی اصلی (کد قبلی بدون تغییر) -->
+            <div class="search-box">
+                <input type="text" id="speciesNameInput" placeholder="نام علمی دقیق را اینجا وارد کنید...">
+                <button id="searchButton">جستجو</button>
+            </div>
+            
+            <!-- بقیه بخش‌های main مثل قبل -->
+            <div id="loadingIndicator" style="display: none;">
+                 <p>در حال بارگذاری اطلاعات...</p>
+            </div>
+            <div id="speciesImageContainer" style="text-align: center; margin-bottom: 20px;"></div>
+            <div id="resultsContainer"></div>
+            <div id="errorContainer" style="display: none; color: red;"></div>
+            
+                    </main>
             <div class="search-box">
                 <input type="text" id="speciesNameInput" placeholder="مثلاً: Panthera leo یا شیر ایرانی">
                 <button id="searchButton">جستجو</button>
