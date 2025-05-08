@@ -1,27 +1,33 @@
 from flask import Flask, jsonify, request
 import requests
 import traceback
-import wikipedia # کتابخانه جدید برای کار با ویکی‌پدیا
+import wikipedia
 
 app = Flask(__name__)
 GBIF_API_URL_MATCH = "https://api.gbif.org/v1/species/match"
 
-# تابع به‌روز شده برای گرفتن تصویر از ویکی‌پدیا
 def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=None):
     search_candidates = []
+    clean_scientific_name = None # مقداردهی اولیه
     clean_scientific_name_for_filename = None
 
     if scientific_name_from_gbif:
-        clean_scientific_name = scientific_name_from_gbif.split('(')[0].strip()
-        if clean_scientific_name:
+        temp_clean_name = scientific_name_from_gbif.split('(')[0].strip()
+        if temp_clean_name:
+            clean_scientific_name = temp_clean_name
             search_candidates.append(clean_scientific_name)
             clean_scientific_name_for_filename = clean_scientific_name.lower().replace(" ", "_")
     
     user_name_for_filename = None
     if species_name_from_user:
-        # اگر نام کاربر با نام علمی یکی بود، دوباره اضافه نکن
-        if not (clean_scientific_name and species_name_from_user.lower() == clean_scientific_name.lower()):
+        should_add_user_name = True
+        if clean_scientific_name: # چک کردن قبل از استفاده
+            if species_name_from_user.lower() == clean_scientific_name.lower():
+                should_add_user_name = False
+        
+        if should_add_user_name:
             search_candidates.append(species_name_from_user)
+        
         user_name_for_filename = species_name_from_user.lower().replace(" ", "_")
     
     if not search_candidates:
@@ -34,24 +40,35 @@ def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=No
     avoid_keywords_in_filename = ["map", "range", "distribution", "locator", "chart", "diagram", "logo", "icon", "disambig", "sound", "audio", "timeline", "scale", "reconstruction", "skeleton", "skull", "footprint", "tracks", "scat", "phylogeny", "cladogram", "taxonomy", "taxobox"]
     
     priority_keywords = []
-    if clean_scientific_name_for_filename:
+    if clean_scientific_name_for_filename: # چک کردن قبل از استفاده
         priority_keywords.append(clean_scientific_name_for_filename)
-        if "_" in clean_scientific_name_for_filename: # اضافه کردن بخش جنس به تنهایی
+        if "_" in clean_scientific_name_for_filename: 
             priority_keywords.append(clean_scientific_name_for_filename.split("_")[0])
             
-    if user_name_for_filename and user_name_for_filename not in priority_keywords:
-        priority_keywords.append(user_name_for_filename)
-        if "_" in user_name_for_filename: # اگر نام کاربر چند کلمه‌ای بود
-             priority_keywords.append(user_name_for_filename.split("_")[0])
+    if user_name_for_filename:
+        if not (clean_scientific_name_for_filename and user_name_for_filename == clean_scientific_name_for_filename):
+            priority_keywords.append(user_name_for_filename)
+        if "_" in user_name_for_filename:
+            user_genus_equivalent = user_name_for_filename.split("_")[0]
+            # مطمئن شویم که اگر clean_scientific_name_for_filename وجود دارد، با آن مقایسه می‌کنیم
+            add_user_genus = True
+            if clean_scientific_name_for_filename and "_" in clean_scientific_name_for_filename:
+                 if user_genus_equivalent == clean_scientific_name_for_filename.split("_")[0]:
+                     add_user_genus = False
+            elif clean_scientific_name_for_filename and user_genus_equivalent == clean_scientific_name_for_filename : # اگر نام علمی تک کلمه‌ای بود
+                 add_user_genus = False
 
 
-    priority_keywords = list(filter(None, dict.fromkeys(priority_keywords))) # حذف تکراری و None
+            if add_user_genus:
+                 priority_keywords.append(user_genus_equivalent)
+
+    priority_keywords = list(filter(None, dict.fromkeys(priority_keywords))) 
     print(f"[WIKI_IMG] Priority keywords for image filename: {priority_keywords}")
 
-    processed_search_terms = set() # برای جلوگیری از جستجوی تکراری یک عبارت
+    processed_search_terms = set() 
 
     while search_candidates:
-        term_to_search = search_candidates.pop(0) # اولین کاندید رو بگیر و از لیست حذف کن
+        term_to_search = search_candidates.pop(0) 
         if not term_to_search or term_to_search in processed_search_terms:
             continue
         processed_search_terms.add(term_to_search)
@@ -69,7 +86,7 @@ def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=No
                     print(f"[WIKI_IMG] No search results in Wikipedia for: '{term_to_search}'")
                     continue
                 page_title_to_get = search_results[0]
-                if page_title_to_get in processed_search_terms: # اگر این صفحه قبلا پردازش شده
+                if page_title_to_get in processed_search_terms: 
                     print(f"[WIKI_IMG] Page '{page_title_to_get}' already processed, skipping.")
                     continue
                 print(f"[WIKI_IMG] Found page via search: '{page_title_to_get}' for '{term_to_search}'")
@@ -81,39 +98,42 @@ def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=No
                 candidate_images_with_scores = []
                 for img_url in wiki_page.images:
                     img_url_lower = img_url.lower()
-                    if not any(ext in img_url_lower for ext in ['.png', '.jpg', '.jpeg']): # .gif و .svg رو فعلا حذف کردم برای سادگی
+                    if not any(ext in img_url_lower for ext in ['.png', '.jpg', '.jpeg']): 
                         continue
                     if any(keyword in img_url_lower for keyword in avoid_keywords_in_filename):
                         continue
                     
                     score = 0
-                    # امتیاز بر اساس کلمات کلیدی اولویت‌دار
                     for pk_word in priority_keywords:
+                        # برای اینکه "leo" در "leopard" پیدا نشه، باید دقیق‌تر چک کنیم
+                        # یا از عبارات کامل استفاده کنیم یا با word boundary در regex
+                        # فعلا in رو نگه می‌داریم برای سادگی
                         if pk_word in img_url_lower:
-                            score += 5 # امتیاز بیشتر برای کلمه کلیدی دقیق
-                            # اگر کلمه کلیدی در ابتدای نام فایل باشد (بعد از آخرین /)
+                            score += 5 
                             filename_part = img_url_lower.split('/')[-1]
-                            if filename_part.startswith(pk_word):
+                            if filename_part.startswith(pk_word): # امتیاز بیشتر اگر نام فایل با کلمه کلیدی شروع بشه
                                 score += 3
+                            if pk_word == clean_scientific_name_for_filename and pk_word in filename_part : # امتیاز ویژه برای نام علمی کامل
+                                score +=5
 
-                    # امتیاز کمتر برای svg اگر تصاویر دیگر هم هستند
-                    if img_url_lower.endswith('.svg'):
-                        score -= 1
-                    
+                    if img_url_lower.endswith('.svg'): score -= 1 # امتیاز کمتر برای SVG
                     candidate_images_with_scores.append({'url': img_url, 'score': score})
                 
                 if not candidate_images_with_scores:
                     print(f"[WIKI_IMG] No images passed filter for '{wiki_page.title}'")
                     continue
 
-                # مرتب‌سازی تصاویر بر اساس امتیاز (بیشترین امتیاز اول)
                 sorted_images = sorted(candidate_images_with_scores, key=lambda x: x['score'], reverse=True)
-                print(f"[WIKI_IMG] Sorted suitable images (top 3): {sorted_images[:3]}")
+                print(f"[WIKI_IMG] Sorted suitable images (top 3 with scores): {[{'url': i['url'][-50:], 'score': i['score']} for i in sorted_images[:3]]}") # نمایش بخش آخر URL و امتیاز
 
-                best_image_url = sorted_images[0]['url']
-                if best_image_url.startswith("//"): best_image_url = "https:" + best_image_url
-                print(f"[WIKI_IMG] Best image found: {best_image_url} with score {sorted_images[0]['score']}")
-                return best_image_url
+
+                if sorted_images and sorted_images[0]['score'] > 0: # فقط اگر امتیازی گرفته باشه
+                    best_image_url = sorted_images[0]['url']
+                    if best_image_url.startswith("//"): best_image_url = "https:" + best_image_url
+                    print(f"[WIKI_IMG] Best image found: {best_image_url} with score {sorted_images[0]['score']}")
+                    return best_image_url
+                else: 
+                    print(f"[WIKI_IMG] No image found with positive score for '{wiki_page.title}'.")
 
             elif wiki_page:
                 print(f"[WIKI_IMG] No images listed on Wikipedia page: '{wiki_page.title}'")
@@ -121,31 +141,27 @@ def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=No
         except wikipedia.exceptions.DisambiguationError as e:
             print(f"[WIKI_IMG] Disambiguation for '{term_to_search}'. Options: {e.options[:3]}")
             if e.options:
-                # اولین گزینه ابهام‌زدایی رو به انتهای لیست کاندیدها اضافه می‌کنیم اگر قبلا نبوده
                 new_candidate = e.options[0]
                 if new_candidate not in processed_search_terms and new_candidate not in search_candidates:
                     search_candidates.append(new_candidate)
                     print(f"[WIKI_IMG] Added disambiguation option '{new_candidate}' to search candidates.")
-            continue # ادامه با کاندید بعدی یا گزینه ابهام‌زدایی
+            continue 
         except wikipedia.exceptions.PageError:
              print(f"[WIKI_IMG] Wikipedia PageError (likely after search or disambiguation) for term: '{term_to_search}'")
              continue
         except Exception as e:
             print(f"[WIKI_IMG] Generic error for '{term_to_search}': {str(e)}")
-            traceback.print_exc() # چاپ کامل خطا برای دیباگ
+            traceback.print_exc() 
             continue
             
     print(f"[WIKI_IMG] No suitable Wikipedia image URL after all attempts for initial candidates.")
     return None
 
-# --- تابع main_handler و بقیه کدها مثل قبل باقی می‌ماند ---
-# (همان کدی که در پیام قبلی برای main_handler و import ها دادم)
 
 @app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'OPTIONS'])
 @app.route('/<path:path>', methods=['GET', 'POST', 'OPTIONS'])
 def main_handler(path=None):
     common_headers = {'Access-Control-Allow-Origin': '*'}
-
     if request.method == 'OPTIONS':
         cors_headers = {**common_headers, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '3600'}
         return ('', 204, cors_headers)
@@ -174,7 +190,7 @@ def main_handler(path=None):
         api_response_gbif = requests.get(GBIF_API_URL_MATCH, params=params_gbif, timeout=10)
         api_response_gbif.raise_for_status()
         data_gbif = api_response_gbif.json()
-
+        
         if not data_gbif or data_gbif.get("matchType") == "NONE" or data_gbif.get("confidence", 0) < 30:
             gbif_error_message = f"موجودی با نام '{species_name_query}' در GBIF پیدا نشد یا نتیجه با اطمینان کافی نبود."
             classification_data = {"searchedName": species_name_query, "matchType": data_gbif.get("matchType", "NONE"), "confidence": data_gbif.get("confidence")}
@@ -188,8 +204,7 @@ def main_handler(path=None):
                 "species": data_gbif.get("species") if data_gbif.get("speciesKey") and data_gbif.get("species") else None,
                 "usageKey": data_gbif.get("usageKey"), "confidence": data_gbif.get("confidence"),
                 "matchType": data_gbif.get("matchType"), "status": data_gbif.get("status"), "rank": data_gbif.get("rank")
-            }
-    
+            }    
     except requests.exceptions.Timeout:
         gbif_error_message = "خطا: زمان پاسخگویی از سرور GBIF بیش از حد طول کشید."
         print(f"[GBIF_ERR] Timeout for: {species_name_query}")
@@ -207,7 +222,6 @@ def main_handler(path=None):
         gbif_error_message = "یک خطای پیش‌بینی نشده داخلی در ارتباط با GBIF رخ داده است."
         print(f"[GBIF_ERR] Generic Error: {str(e_gbif_generic)}")
         traceback.print_exc()
-
 
     wiki_image_url = get_wikipedia_image_url(species_name_query, gbif_scientific_name)
     
