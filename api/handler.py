@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request
 import requests
 import traceback
 import wikipedia
-
+from .utils import get_best_ncbi_suggestion_flexible
 app = Flask(__name__)
 GBIF_API_URL_MATCH = "https://api.gbif.org/v1/species/match"
 
