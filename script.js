@@ -3,9 +3,9 @@ const API_BASE_URL = "https://taxonomy-app-ebon.vercel.app/api/handler"; // آد
 const speciesNameInput = document.getElementById('speciesNameInput');
 const searchButton = document.getElementById('searchButton');
 const resultsContainer = document.getElementById('resultsContainer');
-const loadingIndicator = document.getElementById('loadingIndicator');
+const loadingIndicator = document.getElementById('loadingIndicator'); // برای لودینگ کلی
 const errorContainer = document.getElementById('errorContainer');
-const speciesImageContainer = document.getElementById('speciesImageContainer'); // عنصر برای تصویر
+const speciesImageContainer = document.getElementById('speciesImageContainer'); // برای تصویر و اسپینر تصویر
 
 searchButton.addEventListener('click', performSearch);
 speciesNameInput.addEventListener('keypress', function(event) {
@@ -17,14 +17,17 @@ speciesNameInput.addEventListener('keypress', function(event) {
 async function performSearch() {
     const speciesName = speciesNameInput.value.trim();
 
+    // پاک‌سازی اولیه
     resultsContainer.innerHTML = ''; 
     errorContainer.innerHTML = '';   
     errorContainer.style.display = 'none'; 
-    if (speciesImageContainer) speciesImageContainer.innerHTML = ''; // پاک کردن تصویر قبلی
-    loadingIndicator.style.display = 'block'; 
+    if (speciesImageContainer) {
+        speciesImageContainer.innerHTML = ''; // پاک کردن تصویر یا spinner قبلی
+    }
+    loadingIndicator.style.display = 'block'; // نمایش نشانگر بارگذاری کلی
 
     if (!speciesName) {
-        showError("لطفاً نام یک موجود را وارد کنید.");
+        showError("لطفاً نام یک موجود را وارد کنید."); // loadingIndicator در showError مخفی می‌شود
         return;
     }
 
@@ -33,7 +36,7 @@ async function performSearch() {
         const response = await fetch(apiUrl);
         const data = await response.json();
 
-        loadingIndicator.style.display = 'none'; 
+        loadingIndicator.style.display = 'none'; // مخفی کردن نشانگر بارگذاری کلی بعد از دریافت پاسخ
 
         if (!response.ok) {
             let errorMessage = data.error || data.message || `خطای ناشناخته از سرور (کد: ${response.status})`;
@@ -43,25 +46,52 @@ async function performSearch() {
                 showError(errorMessage); 
             }
         } else {
-            displayResults(data);
+            // اگر پاسخ موفقیت آمیز بود و قرار است تصویری نمایش داده شود، ابتدا اسپینر تصویر را نمایش بده
+            if (data.imageUrl && speciesImageContainer) {
+                speciesImageContainer.innerHTML = '<div class="loader"></div>'; // نمایش spinner برای تصویر
+            } else if (speciesImageContainer) { // اگر تصویری در کار نیست، بخش تصویر را خالی کن
+                 speciesImageContainer.innerHTML = '';
+            }
+            displayResults(data); // نتایج متنی و تصویر اصلی (اگر بود) در این تابع مدیریت می‌شوند
         }
 
     } catch (error) {
-        showError(`خطا در برقراری ارتباط با سرور: ${error.message}`);
+        showError(`خطا در برقراری ارتباط با سرور: ${error.message}`); // loadingIndicator در showError مخفی می‌شود
         console.error("Fetch Error:", error);
     }
 }
 
 function displayResults(data) {
-    // نمایش تصویر اگر imageUrl در پاسخ بک‌اند وجود داشت
-    if (speciesImageContainer) { // ابتدا مطمئن شویم عنصر تصویر در DOM وجود دارد
+    // بخش تصویر توسط قسمت بالایی در performSearch (نمایش اسپینر) و اینجا (جایگزینی با تصویر) مدیریت می‌شود
+    if (speciesImageContainer) {
         if (data.imageUrl) {
-            speciesImageContainer.innerHTML = `<img src="${data.imageUrl}" alt="${data.scientificName || data.searchedName || 'تصویر موجود'}" style="max-width: 100%; max-height: 350px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">`;
+            const img = new Image();
+            img.onload = function() {
+                // وقتی تصویر کاملا لود شد، اسپینر را پاک کرده و تصویر را جایگزین کن
+                speciesImageContainer.innerHTML = ''; 
+                speciesImageContainer.appendChild(img);
+            };
+            img.onerror = function() {
+                speciesImageContainer.innerHTML = '<p>خطا در بارگذاری تصویر.</p>';
+            };
+            img.src = data.imageUrl;
+            img.alt = data.scientificName || data.searchedName || 'تصویر موجود';
+            img.style.maxWidth = "100%";
+            img.style.maxHeight = "350px";
+            img.style.borderRadius = "8px";
+            img.style.boxShadow = "0 4px 8px rgba(0,0,0,0.1)";
         } else {
-            speciesImageContainer.innerHTML = '<p>تصویری برای این موجود یافت نشد.</p>';
+            // اگر از بک‌اند imageUrl نیامد، پیام مناسب نمایش بده
+            // (این حالت توسط بخش بالایی در performSearch هم پوشش داده میشه اگر imageUrl نباشه)
+            if (speciesImageContainer.innerHTML.includes('loader')) { // اگر اسپینر در حال نمایش بود
+                 speciesImageContainer.innerHTML = '<p>تصویری برای این موجود یافت نشد.</p>';
+            } else if (!data.imageUrl) { // اگر اصلا imageUrl نبود و اسپینری هم نمایش داده نشده بود
+                 speciesImageContainer.innerHTML = '<p>تصویری برای این موجود یافت نشد.</p>';
+            }
         }
     }
 
+    // نمایش نتایج متنی طبقه‌بندی
     let htmlOutput = '<h2>نتایج طبقه‌بندی:</h2>';
     htmlOutput += '<ul>';
 
@@ -98,17 +128,15 @@ function showError(message) {
     errorContainer.style.display = 'block';
     resultsContainer.innerHTML = ''; 
     resultsContainer.style.display = 'none'; 
-    if (speciesImageContainer) speciesImageContainer.innerHTML = ''; // پاک کردن تصویر در صورت خطا
+    if (speciesImageContainer) speciesImageContainer.innerHTML = ''; // پاک کردن تصویر/اسپینر
     loadingIndicator.style.display = 'none';
 }
 
 function showInfo(message) {
-    // اگر میخواهید پیام اطلاعاتی (مثل گونه پیدا نشد) در بخش نتایج نمایش داده شود
-    // و با استایل متفاوتی (مثلا آبی)
     resultsContainer.innerHTML = `<p class="info-message">${message}</p>`;
     resultsContainer.style.display = 'block'; 
     errorContainer.innerHTML = '';
     errorContainer.style.display = 'none';
-    if (speciesImageContainer) speciesImageContainer.innerHTML = ''; // پاک کردن تصویر برای پیام اطلاعاتی
+    if (speciesImageContainer) speciesImageContainer.innerHTML = ''; // پاک کردن تصویر/اسپینر
     loadingIndicator.style.display = 'none';
 }
