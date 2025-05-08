@@ -1,28 +1,21 @@
-// آدرس API بک‌اند شما در Vercel
-const API_BASE_URL = "https://taxonomy-app-ebon.vercel.app/api/handler"; // !!! آدرس خودت رو اینجا جایگزین کن !!!
+const API_BASE_URL = "https://taxonomy-app-ebon.vercel.app/api/handler"; // آدرس بک‌اند شما
 
-// گرفتن عناصر HTML از صفحه
 const speciesNameInput = document.getElementById('speciesNameInput');
 const searchButton = document.getElementById('searchButton');
 const resultsContainer = document.getElementById('resultsContainer');
 const loadingIndicator = document.getElementById('loadingIndicator');
 const errorContainer = document.getElementById('errorContainer');
 
-// اضافه کردن event listener به دکمه جستجو
 searchButton.addEventListener('click', performSearch);
-
-// اضافه کردن event listener به فیلد ورودی برای جستجو با زدن Enter
 speciesNameInput.addEventListener('keypress', function(event) {
     if (event.key === 'Enter') {
         performSearch();
     }
 });
 
-// تابع اصلی برای انجام جستجو
 async function performSearch() {
-    const speciesName = speciesNameInput.value.trim(); // گرفتن مقدار ورودی و حذف فاصله‌های اضافی ابتدا و انتها
+    const speciesName = speciesNameInput.value.trim();
 
-    // پاک کردن نتایج و خطاهای قبلی و نمایش نشانگر بارگذاری
     resultsContainer.innerHTML = '';
     errorContainer.innerHTML = '';
     errorContainer.style.display = 'none';
@@ -35,45 +28,42 @@ async function performSearch() {
     }
 
     try {
-        // ساخت URL کامل برای درخواست به API
-        // استفاده از encodeURIComponent برای مدیریت کاراکترهای خاص مثل فاصله در نام گونه
         const apiUrl = `${API_BASE_URL}?name=${encodeURIComponent(speciesName)}`;
-
-        const response = await fetch(apiUrl, {
-            method: 'GET' // متد GET برای API ما کافی است
-        });
-
-        loadingIndicator.style.display = 'none'; // مخفی کردن نشانگر بارگذاری
-
-        const data = await response.json(); // تبدیل پاسخ به JSON
+        const response = await fetch(apiUrl);
+        loadingIndicator.style.display = 'none';
+        const data = await response.json();
 
         if (!response.ok) {
             // اگر پاسخ سرور خطا بود (مثلا 404, 500)
-            showError(`خطا از سرور: ${data.error || response.statusText}`);
+            // یا اگر خود API ما پیام خطا در بدنه JSON برگردونده (مثل گونه پیدا نشد)
+            let errorMessage = data.error || data.message || `خطای ناشناخته از سرور (کد: ${response.status})`;
+            showError(errorMessage);
         } else {
-            // اگر همه چیز موفقیت‌آمیز بود
+            // اگر پاسخ موفقیت آمیز بود و شامل داده‌های طبقه‌بندی بود
             displayResults(data);
         }
 
     } catch (error) {
-        // برای خطاهای شبکه یا خطاهای دیگر در زمان اجرای fetch
         loadingIndicator.style.display = 'none';
-        showError(`خطا در برقراری ارتباط: ${error.message}`);
+        showError(`خطا در برقراری ارتباط با سرور: ${error.message}`);
         console.error("Fetch Error:", error);
     }
 }
 
-// تابع برای نمایش نتایج در صفحه
 function displayResults(data) {
-    if (data.error) { // اگر API خودمون خطایی برگردونده بود (مثلا گونه پیدا نشد)
-        showError(data.error);
+    // اگر API ما پیام 'message' برگردانده (یعنی گونه پیدا نشده یا اطمینان کافی نبوده)
+    // این حالت توسط response.ok در بالا هم گرفته میشه، اما برای اطمینان بیشتر
+    if (data.message && !data.scientificName) { // اگر فقط پیام بود و نه اطلاعات گونه
+        showInfo(data.message); // یک تابع جدید برای نمایش پیام‌های اطلاعاتی
         return;
     }
 
     let htmlOutput = '<h2>نتایج طبقه‌بندی:</h2>';
+    // اینجا میتونیم در آینده تصویر رو هم اضافه کنیم
+    // htmlOutput += `<div id="speciesImageContainer"></div>`;
+
     htmlOutput += '<ul>';
 
-    // تعریف ترتیب و ترجمه فارسی برای نمایش
     const displayOrder = [
         { key: 'searchedName', label: 'نام جستجو شده' },
         { key: 'scientificName', label: 'نام علمی' },
@@ -84,23 +74,46 @@ function displayResults(data) {
         { key: 'family', label: 'خانواده' },
         { key: 'genus', label: 'سرده (جنس)' },
         { key: 'species', label: 'گونه' },
-        { key: 'matchType', label: 'نوع تطابق' },
-        { key: 'confidence', label: 'درجه اطمینان' }
+        { key: 'rank', label: 'رتبه طبقه‌بندی' },
+        { key: 'status', label: 'وضعیت نام' },
+        { key: 'matchType', label: 'نوع تطابق GBIF' },
+        { key: 'confidence', label: 'درجه اطمینان GBIF (%)' },
+        // { key: 'usageKey', label: 'GBIF Usage Key' } // این رو معمولا به کاربر نشون نمیدیم
     ];
 
     displayOrder.forEach(item => {
-        if (data[item.key]) { // فقط اگر کلید در داده وجود داشت، نمایش بده
+        if (data[item.key] !== undefined && data[item.key] !== null) {
             htmlOutput += `<li><strong>${item.label}:</strong> ${data[item.key]}</li>`;
         }
     });
 
     htmlOutput += '</ul>';
     resultsContainer.innerHTML = htmlOutput;
+
+    // اگر usageKey وجود داشت، برای مرحله بعدی (نمایش تصویر) آماده میشیم
+    // if (data.usageKey) {
+    //     fetchAndDisplayImage(data.usageKey);
+    // }
 }
 
-// تابع برای نمایش پیام خطا
 function showError(message) {
     errorContainer.innerHTML = `<p>${message}</p>`;
     errorContainer.style.display = 'block';
-    resultsContainer.innerHTML = ''; // پاک کردن نتایج قبلی اگر خطایی رخ داد
+    resultsContainer.innerHTML = '';
+    loadingIndicator.style.display = 'none'; // مطمئن بشیم که لودینگ هم مخفیه
 }
+
+function showInfo(message) { // تابع جدید برای پیام‌های اطلاعاتی
+    resultsContainer.innerHTML = `<p class="info-message">${message}</p>`; // یک کلاس برای استایل متفاوت
+    errorContainer.innerHTML = '';
+    errorContainer.style.display = 'none';
+    loadingIndicator.style.display = 'none';
+}
+
+// تابع برای گرفتن و نمایش تصویر (در مرحله بعدی پیاده‌سازی میشه)
+// async function fetchAndDisplayImage(usageKey) {
+//     const imageContainer = document.getElementById('speciesImageContainer');
+//     if (!imageContainer) return;
+//     imageContainer.innerHTML = '<p>در حال بارگذاری تصویر...</p>';
+//     // ... کد مربوط به API تصاویر GBIF ...
+// }
