@@ -16,51 +16,58 @@ speciesNameInput.addEventListener('keypress', function(event) {
 async function performSearch() {
     const speciesName = speciesNameInput.value.trim();
 
-    resultsContainer.innerHTML = '';
-    errorContainer.innerHTML = '';
-    errorContainer.style.display = 'none';
-    loadingIndicator.style.display = 'block';
+    resultsContainer.innerHTML = ''; // پاک کردن نتایج قبلی
+    errorContainer.innerHTML = '';   // پاک کردن خطاهای قبلی
+    errorContainer.style.display = 'none'; // مخفی کردن کادر خطا
+    loadingIndicator.style.display = 'block'; // نمایش نشانگر بارگذاری
 
     if (!speciesName) {
         showError("لطفاً نام یک موجود را وارد کنید.");
-        loadingIndicator.style.display = 'none';
+        // loadingIndicator.style.display = 'none'; // این خط در showError انجام میشه
         return;
     }
 
     try {
         const apiUrl = `${API_BASE_URL}?name=${encodeURIComponent(speciesName)}`;
         const response = await fetch(apiUrl);
-        loadingIndicator.style.display = 'none';
+        // loadingIndicator.style.display = 'none'; // این خط هم در showError یا بعد از گرفتن دیتا انجام میشه
         const data = await response.json();
 
         if (!response.ok) {
             // اگر پاسخ سرور خطا بود (مثلا 404, 500)
-            // یا اگر خود API ما پیام خطا در بدنه JSON برگردونده (مثل گونه پیدا نشد)
             let errorMessage = data.error || data.message || `خطای ناشناخته از سرور (کد: ${response.status})`;
-            showError(errorMessage);
+            
+            // چک می‌کنیم که آیا این "خطا" در واقع پیام "گونه پیدا نشد" است یا نه
+            // بک‌اند ما برای "گونه پیدا نشد" کد 404 و یک فیلد 'message' برمی‌گردونه
+            if (response.status === 404 && data.message && !data.error) {
+                loadingIndicator.style.display = 'none'; // مخفی کردن لودینگ قبل از نمایش اطلاعات
+                showInfo(data.message); // اگر فقط پیام "گونه پیدا نشد" بود، با showInfo نمایش بده
+            } else {
+                showError(errorMessage); // در غیر این صورت، به عنوان خطا نمایش بده (لودینگ در showError مخفی میشه)
+            }
         } else {
-            // اگر پاسخ موفقیت آمیز بود و شامل داده‌های طبقه‌بندی بود
+            // اگر همه چیز موفقیت‌آمیز بود و شامل داده‌های طبقه‌بندی بود
+            loadingIndicator.style.display = 'none'; // مخفی کردن لودینگ قبل از نمایش نتایج
             displayResults(data);
         }
 
     } catch (error) {
-        loadingIndicator.style.display = 'none';
+        // loadingIndicator.style.display = 'none'; // این خط در showError انجام میشه
         showError(`خطا در برقراری ارتباط با سرور: ${error.message}`);
         console.error("Fetch Error:", error);
     }
 }
 
 function displayResults(data) {
-    // اگر API ما پیام 'message' برگردانده (یعنی گونه پیدا نشده یا اطمینان کافی نبوده)
-    // این حالت توسط response.ok در بالا هم گرفته میشه، اما برای اطمینان بیشتر
-    if (data.message && !data.scientificName) { // اگر فقط پیام بود و نه اطلاعات گونه
-        showInfo(data.message); // یک تابع جدید برای نمایش پیام‌های اطلاعاتی
-        return;
-    }
+    // این شرط الان در performSearch مدیریت میشه، اما برای اطمینان بیشتر می‌تونه بمونه
+    // if (data.message && !data.scientificName) {
+    //     showInfo(data.message);
+    //     return;
+    // }
 
     let htmlOutput = '<h2>نتایج طبقه‌بندی:</h2>';
-    // اینجا میتونیم در آینده تصویر رو هم اضافه کنیم
-    // htmlOutput += `<div id="speciesImageContainer"></div>`;
+    // اینجا در آینده تصویر رو اضافه می‌کنیم
+    // htmlOutput += `<div id="speciesImageContainer" style="text-align: center; margin-bottom: 15px;"></div>`;
 
     htmlOutput += '<ul>';
 
@@ -89,6 +96,8 @@ function displayResults(data) {
 
     htmlOutput += '</ul>';
     resultsContainer.innerHTML = htmlOutput;
+    resultsContainer.style.display = 'block'; // مطمئن بشیم که کانتینر نتایج نمایش داده میشه
+    errorContainer.style.display = 'none'; // مخفی کردن کادر خطا در صورت موفقیت
 
     // اگر usageKey وجود داشت، برای مرحله بعدی (نمایش تصویر) آماده میشیم
     // if (data.usageKey) {
@@ -99,12 +108,14 @@ function displayResults(data) {
 function showError(message) {
     errorContainer.innerHTML = `<p>${message}</p>`;
     errorContainer.style.display = 'block';
-    resultsContainer.innerHTML = '';
-    loadingIndicator.style.display = 'none'; // مطمئن بشیم که لودینگ هم مخفیه
+    resultsContainer.innerHTML = ''; // پاک کردن نتایج قبلی اگر خطایی رخ داد
+    resultsContainer.style.display = 'none'; // مخفی کردن کانتینر نتایج
+    loadingIndicator.style.display = 'none';
 }
 
-function showInfo(message) { // تابع جدید برای پیام‌های اطلاعاتی
-    resultsContainer.innerHTML = `<p class="info-message">${message}</p>`; // یک کلاس برای استایل متفاوت
+function showInfo(message) {
+    resultsContainer.innerHTML = `<p class="info-message">${message}</p>`;
+    resultsContainer.style.display = 'block'; // نمایش کانتینر نتایج برای پیام اطلاعاتی
     errorContainer.innerHTML = '';
     errorContainer.style.display = 'none';
     loadingIndicator.style.display = 'none';
@@ -113,7 +124,27 @@ function showInfo(message) { // تابع جدید برای پیام‌های ا�
 // تابع برای گرفتن و نمایش تصویر (در مرحله بعدی پیاده‌سازی میشه)
 // async function fetchAndDisplayImage(usageKey) {
 //     const imageContainer = document.getElementById('speciesImageContainer');
-//     if (!imageContainer) return;
+//     if (!imageContainer) return; // اگر در HTML این بخش رو اضافه نکرده باشیم
 //     imageContainer.innerHTML = '<p>در حال بارگذاری تصویر...</p>';
-//     // ... کد مربوط به API تصاویر GBIF ...
+//     try {
+//         // آدرس API تصاویر GBIF: https://api.gbif.org/v1/species/{usageKey}/media
+//         const imageApiUrl = `https://api.gbif.org/v1/species/${usageKey}/media?limit=1`; // فقط یک تصویر
+//         const response = await fetch(imageApiUrl);
+//         if (!response.ok) {
+//             imageContainer.innerHTML = '<p>تصویری برای این موجود یافت نشد.</p>';
+//             return;
+//         }
+//         const mediaData = await response.json();
+//         if (mediaData.results && mediaData.results.length > 0 && mediaData.results[0].identifier) {
+//             const imageUrl = mediaData.results[0].identifier;
+//             // برخی URLها کامل نیستند، باید چک کنیم
+//             const finalImageUrl = imageUrl.startsWith('http') ? imageUrl : `https:${imageUrl}`; // اگر http نداشت، https رو اضافه کنیم (یا از خود GBIF بپرسیم)
+//             imageContainer.innerHTML = `<img src="${finalImageUrl}" alt="تصویر ${speciesNameInput.value}" style="max-width: 100%; max-height: 300px; border-radius: 4px;">`;
+//         } else {
+//             imageContainer.innerHTML = '<p>تصویری برای این موجود یافت نشد.</p>';
+//         }
+//     } catch (error) {
+//         console.error("Error fetching image:", error);
+//         imageContainer.innerHTML = '<p>خطا در بارگذاری تصویر.</p>';
+//     }
 // }
