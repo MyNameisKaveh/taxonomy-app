@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>طبقه‌بندی موجودات</title>
-    <!-- لینک به فایل CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,68 +11,54 @@
         <header>
             <h1>جستجوی طبقه‌بندی موجودات</h1>
             <p>نام علمی یا رایج یک موجود را وارد کنید و اطلاعات طبقه‌بندی و تصویر آن را مشاهده نمایید.</p>
+            <p style="font-size: 0.8em; color: #888;">(اگر نام علمی دقیق را نمی‌دانید، از بخش راهنمای زیر استفاده کنید)</p>
         </header>
 
         <main>
-                    <main>
             <!-- ================================== -->
             <!-- ===== بخش جدید: راهنمای نام علمی ===== -->
             <!-- ================================== -->
             <div class="suggestion-section">
                 <h2>کمک برای یافتن نام علمی</h2>
-                <p>اگر نام علمی دقیق را نمی‌دانید، نام رایج (انگلیسی) را اینجا وارد کنید تا پیشنهاد دریافت کنید.</p>
+                <p>نام رایج (انگلیسی) را اینجا وارد کنید تا نام علمی دقیق‌تر پیشنهاد شود.</p>
                 <div class="suggestion-box">
-                    <input type="text" id="commonNameInput" placeholder="مثلاً: Lion, Cat, Rose">
+                    <input type="text" id="commonNameInput" placeholder="مثلاً: Lion, Cat, Rose, Human">
                     <button id="suggestButton">یافتن نام علمی</button>
                 </div>
                 <div id="suggestionResult" class="suggestion-result-container">
                     <!-- پیشنهاد نام علمی یا پیام‌ها اینجا نمایش داده می‌شود -->
+                    <span>برای دریافت پیشنهاد، نام رایج را وارد و دکمه را بزنید.</span>
                 </div>
             </div>
             <!-- ===== پایان بخش راهنمای نام علمی ===== -->
 
             <hr class="section-divider"> <!-- خط جداکننده -->
 
-            <!-- بخش جستجوی اصلی (کد قبلی بدون تغییر) -->
+            <!-- بخش جستجوی اصلی طبقه‌بندی -->
+             <h2>جستجوی اصلی طبقه‌بندی</h2>
             <div class="search-box">
                 <input type="text" id="speciesNameInput" placeholder="نام علمی دقیق را اینجا وارد کنید...">
                 <button id="searchButton">جستجو</button>
             </div>
             
-            <!-- بقیه بخش‌های main مثل قبل -->
+            <!-- محل نمایش نتایج جستجوی اصلی -->
             <div id="loadingIndicator" style="display: none;">
                  <p>در حال بارگذاری اطلاعات...</p>
             </div>
-            <div id="speciesImageContainer" style="text-align: center; margin-bottom: 20px;"></div>
-            <div id="resultsContainer"></div>
-            <div id="errorContainer" style="display: none; color: red;"></div>
-            
-                    </main>
-            <div class="search-box">
-                <input type="text" id="speciesNameInput" placeholder="مثلاً: Panthera leo یا شیر ایرانی">
-                <button id="searchButton">جستجو</button>
-            </div>
-
-            <div id="loadingIndicator" style="display: none;">
-                <p>در حال بارگذاری اطلاعات...</p>
-            </div>
-
-            <!-- محل نمایش تصویر موجود -->
             <div id="speciesImageContainer" style="text-align: center; margin-bottom: 20px;">
-                <!-- تصویر اینجا توسط جاوااسکریپت بارگذاری می‌شود -->
+                <!-- تصویر اینجا لود می‌شود -->
             </div>
-
             <div id="resultsContainer">
-                <!-- نتایج جستجو اینجا نمایش داده خواهند شد -->
+                <!-- نتایج طبقه‌بندی اینجا نمایش داده می‌شود -->
             </div>
-
-            <div id="errorContainer" style="display: none; color: red;">
-                <!-- پیام‌های خطا اینجا نمایش داده خواهند شد -->
+            <div id="errorContainer" style="display: none;">
+                <!-- پیام‌های خطا اینجا نمایش داده می‌شود -->
             </div>
+            
         </main>
 
         <footer>
-            <p>ساخته شده با استفاده از <a href="https://www.gbif.org/developer/summary" target="_blank">GBIF API</a></p>
+            <p>ساخته شده با استفاده از <a href="https://www.gbif.org/developer/summary" target="_blank">GBIF API</a>, <a href="https://www.ncbi.nlm.nih.gov/books/NBK25500/" target="_blank">NCBI Entrez</a>, و <a href="https://www.mediawiki.org/wiki/API:Main_page" target="_blank">Wikipedia API</a></p>
         </footer>
     </div>
 
