@@ -1,4 +1,4 @@
-# api/handler.py (تست ۱.۱: تغییر نام route/تابع راهنما)
+# api/handler.py (تست ۲.۱: ساده‌سازی route اصلی - اصلاح SyntaxError)
 
 from flask import Flask, jsonify, request
 import requests
@@ -57,7 +57,7 @@ def get_best_ncbi_suggestion_flexible(common_name, max_ids_to_check=5):
 # تابع کمکی: تصویر ویکی‌پدیا
 # =============================================
 def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=None):
-    # ... (کد کامل و بدون تغییر تابع get_wikipedia_image_url) ...
+     # ... (کد کامل و بدون تغییر تابع get_wikipedia_image_url) ...
     search_candidates = []; clean_scientific_name = None; clean_scientific_name_for_filename = None
     if scientific_name_from_gbif: temp_clean_name = scientific_name_from_gbif.split('(')[0].strip();
     if temp_clean_name: clean_scientific_name = temp_clean_name; search_candidates.append(clean_scientific_name); clean_scientific_name_for_filename = clean_scientific_name.lower().replace(" ", "_")    
@@ -128,12 +128,12 @@ def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=No
         except Exception as e: print(f"[WIKI_IMG] Generic error: {e}"); traceback.print_exc(); continue            
     print(f"[WIKI_IMG] No suitable image URL found."); return None
 
+
 # =============================================
 # Endpoint: پیشنهاد نام علمی (راهنما)
-# ** با نام Route و تابع جدید **
 # =============================================
-@app.route('/api/get_suggestion', methods=['GET']) # <-- نام route تغییر کرد
-def scientific_name_suggester(): # <-- نام تابع تغییر کرد
+@app.route('/api/suggest_name', methods=['GET'])
+def suggest_name_endpoint():
     """Endpoint برای پیشنهاد نام علمی بر اساس نام رایج."""
     common_headers = {'Access-Control-Allow-Origin': '*'}
     query = request.args.get('query')
@@ -142,30 +142,44 @@ def scientific_name_suggester(): # <-- نام تابع تغییر کرد
     if not query: return make_response({"error": "Query parameter 'query' is required"}, 400)
     if lang != 'en': return make_response({"error": "Currently only English queries are supported."}, 400)
     try:
-        suggestion = get_best_ncbi_suggestion_flexible(query) 
+        suggestion = get_best_ncbi_suggestion_flexible(query) # تابع کمکی NCBI
         if suggestion: return make_response({"query": query, "scientific_name_suggestion": suggestion}, 200)
         else: return make_response({"query": query, "message": f"No scientific name suggestion found for '{query}'."}, 404)
     except Exception as e: print(f"Error in suggest_name_endpoint: {e}"); traceback.print_exc(); return make_response({"error": "An internal error occurred."}, 500)
 
 # =============================================
 # Endpoint: جستجوی اصلی طبقه‌بندی
-# ** با همه route های قبلی **
+# ** فقط route اصلی فعال است **
 # =============================================
 @app.route('/api/handler', methods=['GET', 'POST', 'OPTIONS']) 
-@app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'OPTIONS']) 
-@app.route('/<path:path>', methods=['GET', 'POST', 'OPTIONS']) 
+# @app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'OPTIONS']) # <-- کامنت شده
+# @app.route('/<path:path>', methods=['GET', 'POST', 'OPTIONS']) # <-- کامنت شده
 def main_handler(path=None):
-    # ... (کد کامل و بدون تغییر تابع main_handler) ...
-    common_headers = {'Access-Control-Allow-Origin': '*'}; 
-    if request.method == 'OPTIONS': cors_headers = {**common_headers, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '3600'}; return ('', 204, cors_headers)
-    species_name_query = ""; 
-    if request.method == 'GET': species_name_query = request.args.get('name')
+    """Endpoint اصلی برای جستجوی طبقه‌بندی و تصویر."""
+    common_headers = {'Access-Control-Allow-Origin': '*'}
+    if request.method == 'OPTIONS':
+        cors_headers = {**common_headers, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '3600'}
+        return ('', 204, cors_headers)
+
+    # --- گرفتن نام جستجو ---
+    species_name_query = ""
+    if request.method == 'GET':
+        species_name_query = request.args.get('name')
     elif request.method == 'POST':
-        try: data_post = request.get_json(); 
-        if data_post: species_name_query = data_post.get('name')
-        else: return jsonify({"error": "درخواست نامعتبر"}), 400, common_headers
-        except Exception as e_post: print(f"Error parsing JSON: {e_post}"); return jsonify({"error": f"خطا در پردازش درخواست"}), 400, common_headers
-    if not species_name_query: return jsonify({"error": "پارامتر 'name' مورد نیاز است."}), 400, common_headers
+        try:
+            data_post = request.get_json(); 
+            if data_post: 
+                species_name_query = data_post.get('name')
+            else: 
+                return jsonify({"error": "درخواست نامعتبر: بدنه JSON خالی است."}), 400, common_headers
+        except Exception as e_post: 
+            print(f"Error parsing JSON body: {str(e_post)}\n{traceback.format_exc()}")
+            return jsonify({"error": f"خطا در پردازش درخواست POST: {str(e_post)}"}), 400, common_headers # <<<--- بلاک except حالا اینجاست
+
+    if not species_name_query:
+        return jsonify({"error": "پارامتر 'name' (در آدرس یا بدنه JSON) مورد نیاز است."}), 400, common_headers
+
+    # --- جستجو در GBIF (مثل قبل) ---
     params_gbif = {"name": species_name_query, "verbose": "true"}; classification_data = {"searchedName": species_name_query}
     gbif_error_message = None; gbif_scientific_name = None
     try:
@@ -176,8 +190,13 @@ def main_handler(path=None):
     except requests.exceptions.HTTPError as http_err_gbif: gbif_error_message = f"خطا GBIF: {http_err_gbif}"; print(f"[GBIF_ERR] HTTPError: {gbif_error_message}")
     except requests.exceptions.RequestException as e_gbif_req: gbif_error_message = f"خطا ارتباط GBIF: {e_gbif_req}"; print(f"[GBIF_ERR] RequestException: {e_gbif_req}")
     except Exception as e_gbif_generic: gbif_error_message = "خطای داخلی GBIF."; print(f"[GBIF_ERR] Generic: {e_gbif_generic}"); traceback.print_exc()
+
+    # --- جستجو برای تصویر در ویکی‌پدیا (مثل قبل) ---
     wiki_image_url = get_wikipedia_image_url(species_name_query, gbif_scientific_name)
-    if wiki_image_url: classification_data["imageUrl"] = wiki_image_url    
+    if wiki_image_url:
+        classification_data["imageUrl"] = wiki_image_url
+    
+    # --- آماده‌سازی و بازگرداندن پاسخ نهایی (مثل قبل) ---
     final_data = {k: v for k, v in classification_data.items() if v is not None}
     if gbif_error_message and not final_data.get("scientificName"): 
         if final_data.get("imageUrl"): final_data["gbifLookupMessage"] = gbif_error_message; return jsonify(final_data), 200, common_headers
