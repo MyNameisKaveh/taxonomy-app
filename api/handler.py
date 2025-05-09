@@ -2,18 +2,41 @@ from flask import Flask, jsonify, request
 import requests
 import traceback
 import wikipedia
-from Bio import Entrez # اضافه شده
-import time            # اضافه شده
+from Bio import Entrez
+import time
+import os 
+import tempfile 
+
+# --- پیکربندی Bio.Entrez برای محیط فقط-خواندنی Vercel ---
+# برای جلوگیری از خطای OSError: [Errno 30] Read-only file system
+# ما باید به Bio.Entrez بگوییم که از پوشه /tmp برای کش DTD استفاده کند.
+# این کار باید قبل از اولین فراخوانی به Entrez.read یا Entrez.parse انجام شود.
+try:
+    from Bio.Entrez import Parser as EntrezParser
+    custom_dtd_dir = os.path.join(tempfile.gettempdir(), "biopython_dtd_cache")
+    if not os.path.exists(custom_dtd_dir):
+        # ایجاد دایرکتوری با مجوزهای مناسب (اگرچه در /tmp معمولاً مشکلی نیست)
+        os.makedirs(custom_dtd_dir, mode=0o755, exist_ok=True) 
+    
+    # این خط مهم است:
+    EntrezParser.DataHandler.local_dtd_dir = custom_dtd_dir
+    print(f"[CONFIG] Bio.Entrez DTD cache directory set to: {EntrezParser.DataHandler.local_dtd_dir}")
+
+except ImportError:
+    print("[CONFIG_WARN] Could not import Bio.Entrez.Parser directly to set DTD cache path.")
+except Exception as e:
+    print(f"[CONFIG_ERR] Error setting Bio.Entrez DTD cache path: {type(e).__name__} - {e}")
+
 
 app = Flask(__name__)
 GBIF_API_URL_MATCH = "https://api.gbif.org/v1/species/match"
 
 # !!! بسیار مهم: ایمیل واقعی خود را اینجا وارد کنید !!!
-Entrez.email = "andolini1889@gmail.com"
+Entrez.email = "YOUR_ACTUAL_EMAIL@example.com" 
 # !!! بسیار مهم: ایمیل واقعی خود را اینجا وارد کنید !!!
 
 
-# --- تابع جستجوی تصویر از ویکی‌پدیا (بدون تغییر) ---
+# --- تابع جستجوی تصویر از ویکی‌پدیا (بدون تغییر نسبت به نسخه قبلی شما) ---
 def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=None):
     search_candidates = []
     clean_scientific_name = None 
@@ -39,10 +62,10 @@ def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=No
         user_name_for_filename = species_name_from_user.lower().replace(" ", "_")
     
     if not search_candidates:
-        print("[WIKI_IMG] No search terms provided.")
+        # print("[WIKI_IMG] No search terms provided.") # برای کاهش لاگ
         return None
 
-    print(f"[WIKI_IMG] Attempting image for candidates: {search_candidates}")
+    # print(f"[WIKI_IMG] Attempting image for candidates: {search_candidates}") # برای کاهش لاگ
     wikipedia.set_lang("en")
 
     avoid_keywords_in_filename = ["map", "range", "distribution", "locator", "chart", "diagram", "logo", "icon", "disambig", "sound", "audio", "timeline", "scale", "reconstruction", "skeleton", "skull", "footprint", "tracks", "scat", "phylogeny", "cladogram", "taxonomy", "taxobox"]
@@ -68,7 +91,7 @@ def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=No
                  priority_keywords.append(user_genus_equivalent)
 
     priority_keywords = list(filter(None, dict.fromkeys(priority_keywords))) 
-    print(f"[WIKI_IMG] Priority keywords for image filename: {priority_keywords}")
+    # print(f"[WIKI_IMG] Priority keywords for image filename: {priority_keywords}") # برای کاهش لاگ
 
     processed_search_terms = set() 
 
@@ -78,27 +101,27 @@ def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=No
             continue
         processed_search_terms.add(term_to_search)
         
-        print(f"[WIKI_IMG] Trying Wikipedia search for term: '{term_to_search}'")
+        # print(f"[WIKI_IMG] Trying Wikipedia search for term: '{term_to_search}'") # برای کاهش لاگ
         try:
             wiki_page = None
             try:
                 wiki_page = wikipedia.page(term_to_search, auto_suggest=True, redirect=True)
-                print(f"[WIKI_IMG] Found page directly: '{wiki_page.title}' for '{term_to_search}'")
+                # print(f"[WIKI_IMG] Found page directly: '{wiki_page.title}' for '{term_to_search}'") # برای کاهش لاگ
             except wikipedia.exceptions.PageError:
-                print(f"[WIKI_IMG] Page not found directly for '{term_to_search}'. Trying wikipedia.search().")
+                # print(f"[WIKI_IMG] Page not found directly for '{term_to_search}'. Trying wikipedia.search().") # برای کاهش لاگ
                 search_results = wikipedia.search(term_to_search, results=1)
                 if not search_results:
-                    print(f"[WIKI_IMG] No search results in Wikipedia for: '{term_to_search}'")
+                    # print(f"[WIKI_IMG] No search results in Wikipedia for: '{term_to_search}'") # برای کاهش لاگ
                     continue
                 page_title_to_get = search_results[0]
                 if page_title_to_get in processed_search_terms: 
-                    print(f"[WIKI_IMG] Page '{page_title_to_get}' already processed, skipping.")
+                    # print(f"[WIKI_IMG] Page '{page_title_to_get}' already processed, skipping.") # برای کاهش لاگ
                     continue
-                print(f"[WIKI_IMG] Found page via search: '{page_title_to_get}' for '{term_to_search}'")
+                # print(f"[WIKI_IMG] Found page via search: '{page_title_to_get}' for '{term_to_search}'") # برای کاهش لاگ
                 wiki_page = wikipedia.page(page_title_to_get, auto_suggest=False, redirect=True)
             
             if wiki_page and wiki_page.images:
-                print(f"[WIKI_IMG] Page '{wiki_page.title}' images (up to 5): {wiki_page.images[:5]}")
+                # print(f"[WIKI_IMG] Page '{wiki_page.title}' images (up to 5): {wiki_page.images[:5]}") # برای کاهش لاگ
                 
                 candidate_images_with_scores = []
                 for img_url in wiki_page.images:
@@ -122,47 +145,49 @@ def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=No
                     candidate_images_with_scores.append({'url': img_url, 'score': score})
                 
                 if not candidate_images_with_scores:
-                    print(f"[WIKI_IMG] No images passed filter for '{wiki_page.title}'")
+                    # print(f"[WIKI_IMG] No images passed filter for '{wiki_page.title}'") # برای کاهش لاگ
                     continue
 
                 sorted_images = sorted(candidate_images_with_scores, key=lambda x: x['score'], reverse=True)
-                print(f"[WIKI_IMG] Sorted suitable images (top 3 with scores): {[{'url': i['url'][-50:], 'score': i['score']} for i in sorted_images[:3]]}")
+                # print(f"[WIKI_IMG] Sorted suitable images (top 3 with scores): {[{'url': i['url'][-50:], 'score': i['score']} for i in sorted_images[:3]]}") # برای کاهش لاگ
 
                 if sorted_images and sorted_images[0]['score'] > 0: 
                     best_image_url = sorted_images[0]['url']
                     if best_image_url.startswith("//"): best_image_url = "https:" + best_image_url
-                    print(f"[WIKI_IMG] Best image found: {best_image_url} with score {sorted_images[0]['score']}")
+                    print(f"[WIKI_IMG] Best image found for '{term_to_search}': {best_image_url} (Score: {sorted_images[0]['score']})")
                     return best_image_url
-                else: 
-                    print(f"[WIKI_IMG] No image found with positive score for '{wiki_page.title}'.")
+                # else: 
+                    # print(f"[WIKI_IMG] No image found with positive score for '{wiki_page.title}'.") # برای کاهش لاگ
 
-            elif wiki_page:
-                print(f"[WIKI_IMG] No images listed on Wikipedia page: '{wiki_page.title}'")
+            # elif wiki_page: # برای کاهش لاگ
+                # print(f"[WIKI_IMG] No images listed on Wikipedia page: '{wiki_page.title}'")
             
         except wikipedia.exceptions.DisambiguationError as e:
-            print(f"[WIKI_IMG] Disambiguation for '{term_to_search}'. Options: {e.options[:3]}")
+            # print(f"[WIKI_IMG] Disambiguation for '{term_to_search}'. Options: {e.options[:3]}") # برای کاهش لاگ
             if e.options:
                 new_candidate = e.options[0]
                 if new_candidate not in processed_search_terms and new_candidate not in search_candidates:
                     search_candidates.append(new_candidate)
-                    print(f"[WIKI_IMG] Added disambiguation option '{new_candidate}' to search candidates.")
+                    # print(f"[WIKI_IMG] Added disambiguation option '{new_candidate}' to search candidates.") # برای کاهش لاگ
             continue 
         except wikipedia.exceptions.PageError:
-             print(f"[WIKI_IMG] Wikipedia PageError (likely after search or disambiguation) for term: '{term_to_search}'")
+             # print(f"[WIKI_IMG] Wikipedia PageError (likely after search or disambiguation) for term: '{term_to_search}'") # برای کاهش لاگ
              continue
         except Exception as e:
-            print(f"[WIKI_IMG] Generic error for '{term_to_search}': {str(e)}")
-            traceback.print_exc() 
+            print(f"[WIKI_IMG] Generic error for '{term_to_search}': {type(e).__name__} - {str(e)}") # نمایش نوع خطا هم مفید است
+            # traceback.print_exc() # این می‌تواند لاگ‌ها را خیلی شلوغ کند، فعلا کامنت
             continue
             
-    print(f"[WIKI_IMG] No suitable Wikipedia image URL after all attempts for initial candidates.")
+    print(f"[WIKI_IMG] No suitable Wikipedia image URL after all attempts for initial user input: '{species_name_from_user}'.")
     return None
 
 # --- تابع جدید برای پیشنهاد نام علمی از NCBI ---
 def get_best_ncbi_suggestion_flexible(common_name, max_ids_to_check=5):
-    print(f"\n--- [NCBI Suggestion] Processing '{common_name}' ---")
+    print(f"[NCBI_SUGGEST] Processing '{common_name}'")
     scientific_name_suggestion = None
     try:
+        # NCBI rate limit: حداقل 0.33 ثانیه بین درخواست‌ها. بهتر است کمی بیشتر صبر کنیم.
+        time.sleep(0.4) 
         search_term = f"{common_name}[Common Name] OR {common_name}[Organism]"
         handle = Entrez.esearch(db="taxonomy", term=search_term, retmax=max_ids_to_check, sort="relevance")
         record = Entrez.read(handle)
@@ -170,25 +195,23 @@ def get_best_ncbi_suggestion_flexible(common_name, max_ids_to_check=5):
         id_list = record["IdList"]
 
         if not id_list:
-            time.sleep(0.34) # NCBI rate limit compliance
+            time.sleep(0.4) # NCBI rate limit compliance
             handle = Entrez.esearch(db="taxonomy", term=common_name, retmax=max_ids_to_check, sort="relevance")
             record = Entrez.read(handle)
             handle.close()
             id_list = record["IdList"]
             if not id_list:
-                print(f"  [NCBI Suggestion] No TaxIDs found for '{common_name}' even after retry.")
+                print(f"  [NCBI_SUGGEST] No TaxIDs found for '{common_name}' even after retry.")
                 return None
         
-        print(f"  [NCBI Suggestion] Found {len(id_list)} potential TaxIDs: {id_list}")
+        # print(f"  [NCBI_SUGGEST] Found {len(id_list)} potential TaxIDs: {id_list}") # برای کاهش لاگ
         ids_to_fetch = id_list[:max_ids_to_check] 
         if not ids_to_fetch: return None
 
-        # NCBI rate limit: wait before next request (esummary)
-        wait_time = 0.2 + (0.34 * len(ids_to_fetch)) 
-        time.sleep(wait_time) 
+        time.sleep(0.4) # NCBI rate limit
         
         summary_handle = Entrez.esummary(db="taxonomy", id=",".join(ids_to_fetch), retmode="xml")
-        summary_records = Entrez.read(summary_handle)
+        summary_records = Entrez.read(summary_handle) # اینجاست که خطای قبلی رخ می‌داد
         summary_handle.close()
         
         candidates = { 
@@ -202,51 +225,38 @@ def get_best_ncbi_suggestion_flexible(common_name, max_ids_to_check=5):
         for summary_record in summary_records:
             sci_name = summary_record.get("ScientificName")
             rank_ncbi = summary_record.get("Rank", "N/A").lower()
-            # tax_id_processed = summary_record.get("Id") # برای لاگ کردن مفید است
-            # print(f"    - Candidate TaxID {tax_id_processed}: '{sci_name}', Rank: {rank_ncbi}")
-
             if sci_name:
-                if rank_ncbi == "species":
-                    if not candidates["species"]:
-                         candidates["species"] = sci_name
-                elif rank_ncbi == "subspecies":
-                    if not candidates["subspecies"]:
-                        candidates["subspecies"] = sci_name
-                elif rank_ncbi == "genus":
-                     if not candidates["genus"]:
-                         candidates["genus"] = sci_name
-                elif rank_ncbi == "family":
-                     if not candidates["family"]:
-                         candidates["family"] = sci_name
-                elif not candidates["other_valid"]: # اولین نام معتبر دیگر
+                if rank_ncbi == "species" and not candidates["species"]:
+                    candidates["species"] = sci_name
+                elif rank_ncbi == "subspecies" and not candidates["subspecies"]:
+                    candidates["subspecies"] = sci_name
+                elif rank_ncbi == "genus" and not candidates["genus"]:
+                    candidates["genus"] = sci_name
+                elif rank_ncbi == "family" and not candidates["family"]:
+                    candidates["family"] = sci_name
+                elif not candidates["other_valid"]:
                      candidates["other_valid"] = sci_name
         
-        # تصمیم‌گیری نهایی بر اساس اولویت
         if candidates["species"]:
             scientific_name_suggestion = candidates["species"]
         elif candidates["subspecies"]:
             parts = candidates["subspecies"].split()
-            if len(parts) >= 2: # استخراج نام گونه از زیرگونه
-                scientific_name_suggestion = " ".join(parts[:2])
-            else: # اگر فرمت نام زیرگونه استاندارد نبود، خود نام زیرگونه را برمی‌گردانیم
-                scientific_name_suggestion = candidates["subspecies"] 
+            scientific_name_suggestion = " ".join(parts[:2]) if len(parts) >= 2 else candidates["subspecies"]
         elif candidates["genus"]:
             scientific_name_suggestion = candidates["genus"]
         elif candidates["family"]:
             scientific_name_suggestion = candidates["family"]
         elif candidates["other_valid"]:
              scientific_name_suggestion = candidates["other_valid"]
-        # else:
-            # print(f"  [NCBI Suggestion] No suitable scientific name found according to prioritization for '{common_name}'.")
 
     except Exception as e:
-        print(f"  [NCBI Suggestion] Error querying NCBI Entrez for '{common_name}': {type(e).__name__} - {e}")
-        traceback.print_exc() # برای دیباگ در لاگ‌های Vercel مفید است
+        print(f"  [NCBI_SUGGEST_ERR] Error querying NCBI for '{common_name}': {type(e).__name__} - {e}")
+        # traceback.print_exc() # برای دیباگ دقیق‌تر اگر لازم شد، اما لاگ را شلوغ می‌کند
         
     if scientific_name_suggestion:
-        print(f"  [NCBI Suggestion] Final suggestion for '{common_name}': {scientific_name_suggestion}")
+        print(f"  [NCBI_SUGGEST] Suggestion for '{common_name}': {scientific_name_suggestion}")
     else:
-        print(f"  [NCBI Suggestion] No suggestion found for '{common_name}'.")
+        print(f"  [NCBI_SUGGEST] No suggestion found for '{common_name}'.")
     return scientific_name_suggestion
 
 # --- Endpoint جدید برای پیشنهاد نام علمی ---
@@ -257,7 +267,7 @@ def suggest_name_handler():
         cors_headers = {
             **common_headers, 
             'Access-Control-Allow-Methods': 'GET, OPTIONS', 
-            'Access-Control-Allow-Headers': 'Content-Type', 
+            'Access-Control-Allow-Headers': 'Content-Type, X-Requested-With', # X-Requested-With گاهی لازم است
             'Access-Control-Max-Age': '3600'
         }
         return ('', 204, cors_headers)
@@ -277,29 +287,22 @@ def suggest_name_handler():
             return jsonify({
                 "message": f"نام علمی برای '{common_name_query}' توسط NCBI پیشنهاد نشد.", 
                 "common_name_searched": common_name_query
-            }), 404, common_headers
+            }), 404, common_headers # 404 منطقی است اگر نتیجه‌ای نباشد
     except Exception as e:
-        print(f"Error in suggest_name_handler for '{common_name_query}': {str(e)}")
-        traceback.print_exc()
+        print(f"[API_ERR] suggest_name_handler for '{common_name_query}': {type(e).__name__} - {str(e)}")
+        traceback.print_exc() # این traceback برای خطاهای غیرمنتظره در خود handler مفید است
         return jsonify({"error": "خطای داخلی سرور هنگام پردازش درخواست پیشنهاد نام."}), 500, common_headers
 
-# --- Endpoint اصلی برای جستجوی طبقه‌بندی (با تغییرات جزئی در CORS برای سازگاری) ---
+# --- Endpoint اصلی برای جستجوی طبقه‌بندی ---
 @app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'OPTIONS'])
 @app.route('/<path:path>', methods=['GET', 'POST', 'OPTIONS'])
 def main_handler(path=None):
-    # اگر path برابر با 'api/suggest_scientific_name' بود، اینجا نباید اجرا شود
-    # Flask ابتدا route های خاص تر را match می‌کند.
-    # اما برای اطمینان، می‌توان یک شرط گذاشت یا مطمئن شد که Vercel routing درست کار می‌کند.
-    # اگر endpoint های شما در یک فایل هستند، Flask خودش مدیریت می‌کند.
-    # اگر `path` با `/api/suggest_scientific_name` شروع شود، این یعنی route بالا آن را نگرفته.
-    # این اتفاق نباید بیفتد اگر endpoint ها درست تعریف شده باشند.
-
     common_headers = {'Access-Control-Allow-Origin': '*'}
     if request.method == 'OPTIONS':
         cors_headers = {
             **common_headers, 
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization', 
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With', 
             'Access-Control-Max-Age': '3600'
         }
         return ('', 204, cors_headers)
@@ -311,13 +314,12 @@ def main_handler(path=None):
         try:
             data_post = request.get_json()
             if data_post: species_name_query = data_post.get('name')
-            else: return jsonify({"error": "درخواست نامعتبر: بدنه JSON خالی است یا قابل خواندن نیست."}), 400, common_headers
-        except Exception as e_post:
-            print(f"Error parsing JSON body: {str(e_post)}\n{traceback.format_exc()}")
-            return jsonify({"error": f"خطا در پردازش درخواست: {str(e_post)}"}), 400, common_headers
+            else: return jsonify({"error": "درخواست نامعتبر: بدنه JSON خالی یا نادرست."}), 400, common_headers
+        except Exception: # گرفتن خطای کلی برای parsing JSON
+            return jsonify({"error": "خطا در خواندن بدنه JSON درخواست."}), 400, common_headers
 
     if not species_name_query:
-        return jsonify({"error": "پارامتر 'name' (در آدرس یا بدنه JSON) مورد نیاز است."}), 400, common_headers
+        return jsonify({"error": "پارامتر 'name' مورد نیاز است."}), 400, common_headers
 
     params_gbif = {"name": species_name_query, "verbose": "true"}
     classification_data = {}
@@ -335,8 +337,7 @@ def main_handler(path=None):
         else:
             gbif_scientific_name = data_gbif.get("scientificName")
             classification_data = {
-                "searchedName": species_name_query,
-                "scientificName": gbif_scientific_name,
+                "searchedName": species_name_query, "scientificName": gbif_scientific_name,
                 "kingdom": data_gbif.get("kingdom"), "phylum": data_gbif.get("phylum"), "class": data_gbif.get("class"),
                 "order": data_gbif.get("order"), "family": data_gbif.get("family"), "genus": data_gbif.get("genus"),
                 "species": data_gbif.get("species") if data_gbif.get("speciesKey") and data_gbif.get("species") else None,
@@ -369,11 +370,14 @@ def main_handler(path=None):
     final_data = {k: v for k, v in classification_data.items() if v is not None}
 
     if gbif_error_message and not final_data.get("scientificName"): 
-        if final_data.get("imageUrl"): # اگر GBIF خطا داد ولی تصویری پیدا شد (مثلا برای نام رایج)
-             return jsonify({"message": gbif_error_message, **final_data}), 200, common_headers # با کد 200 چون تصویر داریم
+        if final_data.get("imageUrl"):
+             return jsonify({"message": gbif_error_message, **final_data}), 200, common_headers
         return jsonify({"message": gbif_error_message, "searchedName": species_name_query}), 404, common_headers
     
+    if not final_data and not gbif_error_message: # اگر هیچ داده ای از GBIF و هیچ خطایی هم نبود
+        return jsonify({"message": f"اطلاعاتی برای '{species_name_query}' یافت نشد."}), 404, common_headers
+
     return jsonify(final_data), 200, common_headers
 
 # if __name__ == "__main__":
-#    app.run(debug=True) # برای تست محلی، اگر لازم بود
+#    app.run(debug=True, port=5002) # برای تست محلی اگر لازم شد، پورت را تغییر دهید
