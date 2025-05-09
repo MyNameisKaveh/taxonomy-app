@@ -1,204 +1,390 @@
-# api/handler.py (تست ۲.۱: ساده‌سازی route اصلی - اصلاح SyntaxError)
-
 from flask import Flask, jsonify, request
 import requests
 import traceback
 import wikipedia
-from Bio import Entrez 
-import time
+import time # برای NCBI
+
+# --- NCBI Entrez Imports and Setup ---
+from Bio import Entrez
+Entrez.email = "YOUR_ACTUAL_EMAIL@example.com" # !!! ایمیل معتبر خودتان را اینجا وارد کنید !!!
+# --- END NCBI ---
 
 app = Flask(__name__)
 GBIF_API_URL_MATCH = "https://api.gbif.org/v1/species/match"
-ENTREZ_EMAIL = "andolini1889@gmail.com" 
-Entrez.email = ENTREZ_EMAIL
 
-# =============================================
-# تابع کمکی: پیشنهاد NCBI
-# =============================================
+# --- START: NCBI Suggestion Function (کد تست شما با کمی تغییرات جزئی برای ادغام) ---
 def get_best_ncbi_suggestion_flexible(common_name, max_ids_to_check=5):
-    # ... (کد کامل و بدون تغییر تابع get_best_ncbi_suggestion_flexible) ...
-    print(f"\n--- Processing '{common_name}' with NCBI Entrez (Flexible Ranks) ---")
+    app.logger.info(f"[NCBI_LOG] Processing '{common_name}' with NCBI Entrez (Flexible Ranks)")
     scientific_name_suggestion = None
     try:
-        search_term = f"{common_name}[Common Name] OR {common_name}[Organism]"; handle = Entrez.esearch(db="taxonomy", term=search_term, retmax=max_ids_to_check, sort="relevance"); record = Entrez.read(handle); handle.close(); id_list = record["IdList"]
-        if not id_list: time.sleep(0.34); handle = Entrez.esearch(db="taxonomy", term=common_name, retmax=max_ids_to_check, sort="relevance"); record = Entrez.read(handle); handle.close(); id_list = record["IdList"]
-        if not id_list: print(f"  No TaxIDs found for '{common_name}' even after retry."); return None            
-        print(f"  Found {len(id_list)} potential TaxIDs: {id_list}"); ids_to_fetch = id_list[:max_ids_to_check] 
-        if not ids_to_fetch: return None
-        wait_time = 0.2 + (0.34 * len(ids_to_fetch)); time.sleep(wait_time)             
-        summary_handle = Entrez.esummary(db="taxonomy", id=",".join(ids_to_fetch), retmode="xml"); summary_records = Entrez.read(summary_handle); summary_handle.close()            
-        candidates = { "species": None, "subspecies": None, "genus": None, "family": None, "other_valid": None }            
-        for summary_record in summary_records:
-            sci_name = summary_record.get("ScientificName"); rank_ncbi = summary_record.get("Rank", "N/A").lower(); tax_id_processed = summary_record.get("Id") 
-            print(f"    - Candidate TaxID {tax_id_processed}: '{sci_name}', Rank: {rank_ncbi}")
-            if sci_name:
-                if rank_ncbi == "species":
-                    if not candidates["species"]: print(f"      -> Found Species Match: '{sci_name}'"); candidates["species"] = sci_name
-                elif rank_ncbi == "subspecies":
-                    if not candidates["subspecies"]: print(f"      -> Found Subspecies Match: '{sci_name}'"); candidates["subspecies"] = sci_name
-                elif rank_ncbi == "genus":
-                     if not candidates["genus"]: print(f"      -> Found Genus Match: '{sci_name}'"); candidates["genus"] = sci_name
-                elif rank_ncbi == "family":
-                     if not candidates["family"]: print(f"      -> Found Family Match: '{sci_name}'"); candidates["family"] = sci_name
-                elif not candidates["other_valid"]: print(f"      -> Found Other Valid Scientific Name: '{sci_name}' (Rank: {rank_ncbi})"); candidates["other_valid"] = sci_name            
-        if candidates["species"]: scientific_name_suggestion = candidates["species"]
-        elif candidates["subspecies"]:
-            parts = candidates["subspecies"].split(); 
-            if len(parts) >= 2: scientific_name_suggestion = " ".join(parts[:2]); print(f"  -> Using Species name from Subspecies: '{scientific_name_suggestion}'")
-            else: scientific_name_suggestion = candidates["subspecies"] 
-        elif candidates["genus"]: print(f"  -> Using Genus name as best match: '{candidates['genus']}'"); scientific_name_suggestion = candidates["genus"]
-        elif candidates["family"]: print(f"  -> Using Family name as best match: '{candidates['family']}'"); scientific_name_suggestion = candidates["family"]
-        elif candidates["other_valid"]: print(f"  -> Using first other valid name as best match: '{candidates['other_valid']}'"); scientific_name_suggestion = candidates["other_valid"]
-        else: print(f"  No suitable scientific name found according to prioritization.")
-    except Exception as e: print(f"  Error querying NCBI Entrez: {type(e).__name__} - {e}")            
-    return scientific_name_suggestion
+        search_term = f"{common_name}[Common Name] OR {common_name}[Organism]"
+        handle = Entrez.esearch(db="taxonomy", term=search_term, retmax=max_ids_to_check, sort="relevance")
+        record = Entrez.read(handle)
+        handle.close()
+        id_list = record["IdList"]
 
-# =============================================
-# تابع کمکی: تصویر ویکی‌پدیا
-# =============================================
+        if not id_list:
+            app.logger.info(f"[NCBI_LOG] No TaxIDs found for '{common_name}' with field filter. Retrying without filter...")
+            time.sleep(0.34) # رعایت نرخ درخواست NCBI
+            handle = Entrez.esearch(db="taxonomy", term=common_name, retmax=max_ids_to_check, sort="relevance")
+            record = Entrez.read(handle)
+            handle.close()
+            id_list = record["IdList"]
+            if not id_list:
+                app.logger.info(f"[NCBI_LOG] No TaxIDs found for '{common_name}' even after retry.")
+                return None
+        
+        app.logger.info(f"[NCBI_LOG] Found {len(id_list)} potential TaxIDs: {id_list}")
+        ids_to_fetch = id_list[:max_ids_to_check] 
+        if not ids_to_fetch: return None
+
+        wait_time = 0.2 + (0.34 * len(ids_to_fetch))
+        time.sleep(wait_time) 
+        
+        summary_handle = Entrez.esummary(db="taxonomy", id=",".join(ids_to_fetch), retmode="xml")
+        summary_records = Entrez.read(summary_handle)
+        summary_handle.close()
+        
+        candidates = { 
+            "species": None, "subspecies": None, "genus": None, 
+            "family": None, "other_valid": None
+        }
+        
+        for summary_record in summary_records:
+            sci_name = summary_record.get("ScientificName")
+            rank_ncbi = summary_record.get("Rank", "N/A").lower()
+            tax_id_processed = summary_record.get("Id") 
+            app.logger.debug(f"[NCBI_LOG] Candidate TaxID {tax_id_processed}: '{sci_name}', Rank: {rank_ncbi}")
+
+            if sci_name:
+                if rank_ncbi == "species" and not candidates["species"]:
+                     candidates["species"] = sci_name
+                elif rank_ncbi == "subspecies" and not candidates["subspecies"]:
+                     candidates["subspecies"] = sci_name
+                elif rank_ncbi == "genus" and not candidates["genus"]:
+                     candidates["genus"] = sci_name
+                elif rank_ncbi == "family" and not candidates["family"]:
+                     candidates["family"] = sci_name
+                elif not candidates["other_valid"]: # اولین نام علمی معتبر دیگر
+                     candidates["other_valid"] = sci_name
+        
+        if candidates["species"]:
+            scientific_name_suggestion = candidates["species"]
+        elif candidates["subspecies"]:
+            parts = candidates["subspecies"].split()
+            scientific_name_suggestion = " ".join(parts[:2]) if len(parts) >= 2 else candidates["subspecies"]
+        elif candidates["genus"]:
+            scientific_name_suggestion = candidates["genus"]
+        elif candidates["family"]:
+            scientific_name_suggestion = candidates["family"]
+        elif candidates["other_valid"]:
+             scientific_name_suggestion = candidates["other_valid"]
+        else:
+            app.logger.info(f"[NCBI_LOG] No suitable scientific name found according to prioritization for '{common_name}'.")
+
+    except Exception as e:
+        app.logger.error(f"[NCBI_ERR] Error querying NCBI Entrez for '{common_name}': {type(e).__name__} - {e}")
+        traceback.print_exc()
+        
+    app.logger.info(f"[NCBI_LOG] Final NCBI Suggestion for '{common_name}': {scientific_name_suggestion}")
+    return scientific_name_suggestion
+# --- END: NCBI Suggestion Function ---
+
+
 def get_wikipedia_image_url(species_name_from_user, scientific_name_from_gbif=None):
-     # ... (کد کامل و بدون تغییر تابع get_wikipedia_image_url) ...
-    search_candidates = []; clean_scientific_name = None; clean_scientific_name_for_filename = None
-    if scientific_name_from_gbif: temp_clean_name = scientific_name_from_gbif.split('(')[0].strip();
-    if temp_clean_name: clean_scientific_name = temp_clean_name; search_candidates.append(clean_scientific_name); clean_scientific_name_for_filename = clean_scientific_name.lower().replace(" ", "_")    
+    search_candidates = []
+    clean_scientific_name = None 
+    clean_scientific_name_for_filename = None
+
+    if scientific_name_from_gbif:
+        temp_clean_name = scientific_name_from_gbif.split('(')[0].strip()
+        if temp_clean_name:
+            clean_scientific_name = temp_clean_name
+            search_candidates.append(clean_scientific_name)
+            clean_scientific_name_for_filename = clean_scientific_name.lower().replace(" ", "_")
+    
     user_name_for_filename = None
-    if species_name_from_user: should_add_user_name = True
-    if clean_scientific_name: 
-        if species_name_from_user.lower() == clean_scientific_name.lower(): should_add_user_name = False
-    if should_add_user_name: search_candidates.append(species_name_from_user)
-    user_name_for_filename = species_name_from_user.lower().replace(" ", "_")    
-    if not search_candidates: print("[WIKI_IMG] No search terms provided."); return None
-    print(f"[WIKI_IMG] Attempting image for candidates: {search_candidates}"); wikipedia.set_lang("en")
-    avoid_keywords_in_filename = ["map", "range", "distribution", "locator", "chart", "diagram", "logo", "icon", "disambig", "sound", "audio", "timeline", "scale", "reconstruction", "skeleton", "skull", "footprint", "tracks", "scat", "phylogeny", "cladogram", "taxonomy", "taxobox"]    
+    if species_name_from_user:
+        should_add_user_name = True
+        if clean_scientific_name: 
+            if species_name_from_user.lower() == clean_scientific_name.lower():
+                should_add_user_name = False
+        
+        if should_add_user_name:
+            search_candidates.append(species_name_from_user)
+        user_name_for_filename = species_name_from_user.lower().replace(" ", "_")
+    
+    if not search_candidates:
+        app.logger.warning("[WIKI_IMG] No search terms provided.")
+        return None
+
+    app.logger.info(f"[WIKI_IMG] Attempting image for candidates: {search_candidates}")
+    wikipedia.set_lang("en")
+
+    avoid_keywords_in_filename = ["map", "range", "distribution", "locator", "chart", "diagram", "logo", "icon", "disambig", "sound", "audio", "timeline", "scale", "reconstruction", "skeleton", "skull", "footprint", "tracks", "scat", "phylogeny", "cladogram", "taxonomy", "taxobox"]
+    
     priority_keywords = []
-    if clean_scientific_name_for_filename: priority_keywords.append(clean_scientific_name_for_filename); 
-    if "_" in clean_scientific_name_for_filename: priority_keywords.append(clean_scientific_name_for_filename.split("_")[0])            
+    if clean_scientific_name_for_filename: 
+        priority_keywords.append(clean_scientific_name_for_filename)
+        if "_" in clean_scientific_name_for_filename: 
+            priority_keywords.append(clean_scientific_name_for_filename.split("_")[0])
+            
     if user_name_for_filename:
-        if not (clean_scientific_name_for_filename and user_name_for_filename == clean_scientific_name_for_filename): priority_keywords.append(user_name_for_filename)
-        if "_" in user_name_for_filename: user_genus_equivalent = user_name_for_filename.split("_")[0]; add_user_genus = True
-        if clean_scientific_name_for_filename and "_" in clean_scientific_name_for_filename:
-             if user_genus_equivalent == clean_scientific_name_for_filename.split("_")[0]: add_user_genus = False
-        elif clean_scientific_name_for_filename and user_genus_equivalent == clean_scientific_name_for_filename : add_user_genus = False
-        if add_user_genus: priority_keywords.append(user_genus_equivalent)
+        if not (clean_scientific_name_for_filename and user_name_for_filename == clean_scientific_name_for_filename):
+            priority_keywords.append(user_name_for_filename)
+        if "_" in user_name_for_filename:
+            user_genus_equivalent = user_name_for_filename.split("_")[0]
+            add_user_genus = True
+            if clean_scientific_name_for_filename and "_" in clean_scientific_name_for_filename:
+                 if user_genus_equivalent == clean_scientific_name_for_filename.split("_")[0]:
+                     add_user_genus = False
+            elif clean_scientific_name_for_filename and user_genus_equivalent == clean_scientific_name_for_filename : 
+                 add_user_genus = False
+            if add_user_genus:
+                 priority_keywords.append(user_genus_equivalent)
+
     priority_keywords = list(filter(None, dict.fromkeys(priority_keywords))) 
-    print(f"[WIKI_IMG] Priority keywords: {priority_keywords}"); processed_search_terms = set() 
+    app.logger.info(f"[WIKI_IMG] Priority keywords for image filename: {priority_keywords}")
+
+    processed_search_terms = set() 
+
     while search_candidates:
-        term_to_search = search_candidates.pop(0); 
-        if not term_to_search or term_to_search in processed_search_terms: continue
-        processed_search_terms.add(term_to_search)        
-        print(f"[WIKI_IMG] Trying term: '{term_to_search}'"); 
+        term_to_search = search_candidates.pop(0) 
+        if not term_to_search or term_to_search in processed_search_terms:
+            continue
+        processed_search_terms.add(term_to_search)
+        
+        app.logger.info(f"[WIKI_IMG] Trying Wikipedia search for term: '{term_to_search}'")
         try:
             wiki_page = None
-            try: wiki_page = wikipedia.page(term_to_search, auto_suggest=True, redirect=True); print(f"[WIKI_IMG] Found page directly: '{wiki_page.title}'")
+            try:
+                wiki_page = wikipedia.page(term_to_search, auto_suggest=True, redirect=True)
+                app.logger.info(f"[WIKI_IMG] Found page directly: '{wiki_page.title}' for '{term_to_search}'")
             except wikipedia.exceptions.PageError:
-                print(f"[WIKI_IMG] Page not direct. Trying search."); search_results = wikipedia.search(term_to_search, results=1)
-                if not search_results: print(f"[WIKI_IMG] No search results."); continue
+                app.logger.info(f"[WIKI_IMG] Page not found directly for '{term_to_search}'. Trying wikipedia.search().")
+                search_results = wikipedia.search(term_to_search, results=1)
+                if not search_results:
+                    app.logger.info(f"[WIKI_IMG] No search results in Wikipedia for: '{term_to_search}'")
+                    continue
                 page_title_to_get = search_results[0]
-                if page_title_to_get in processed_search_terms: print(f"[WIKI_IMG] Page '{page_title_to_get}' processed."); continue
-                print(f"[WIKI_IMG] Found via search: '{page_title_to_get}'"); wiki_page = wikipedia.page(page_title_to_get, auto_suggest=False, redirect=True)            
+                if page_title_to_get in processed_search_terms: 
+                    app.logger.info(f"[WIKI_IMG] Page '{page_title_to_get}' already processed, skipping.")
+                    continue
+                app.logger.info(f"[WIKI_IMG] Found page via search: '{page_title_to_get}' for '{term_to_search}'")
+                wiki_page = wikipedia.page(page_title_to_get, auto_suggest=False, redirect=True)
+            
             if wiki_page and wiki_page.images:
-                print(f"[WIKI_IMG] Images (up to 5): {wiki_page.images[:5]}"); candidate_images_with_scores = []
+                app.logger.debug(f"[WIKI_IMG] Page '{wiki_page.title}' images (up to 5): {wiki_page.images[:5]}")
+                
+                candidate_images_with_scores = []
                 for img_url in wiki_page.images:
-                    img_url_lower = img_url.lower(); 
-                    if not any(ext in img_url_lower for ext in ['.png', '.jpg', '.jpeg']): continue
-                    if any(keyword in img_url_lower for keyword in avoid_keywords_in_filename): continue                    
+                    img_url_lower = img_url.lower()
+                    if not any(ext in img_url_lower for ext in ['.png', '.jpg', '.jpeg']): 
+                        continue
+                    if any(keyword in img_url_lower for keyword in avoid_keywords_in_filename):
+                        continue
+                    
                     score = 0
                     for pk_word in priority_keywords:
-                        if pk_word in img_url_lower: score += 5; filename_part = img_url_lower.split('/')[-1]
-                        if filename_part.startswith(pk_word): score += 3
-                        if clean_scientific_name_for_filename and pk_word == clean_scientific_name_for_filename and pk_word in filename_part : score +=5
+                        if pk_word in img_url_lower:
+                            score += 5 
+                            filename_part = img_url_lower.split('/')[-1]
+                            if filename_part.startswith(pk_word): 
+                                score += 3
+                            if pk_word == clean_scientific_name_for_filename and pk_word in filename_part : 
+                                score +=5
                     if img_url_lower.endswith('.svg'): score -= 1
-                    candidate_images_with_scores.append({'url': img_url, 'score': score})                
-                if not candidate_images_with_scores: print(f"[WIKI_IMG] No images passed filter."); continue
+                    candidate_images_with_scores.append({'url': img_url, 'score': score})
+                
+                if not candidate_images_with_scores:
+                    app.logger.info(f"[WIKI_IMG] No images passed filter for '{wiki_page.title}'")
+                    continue
+
                 sorted_images = sorted(candidate_images_with_scores, key=lambda x: x['score'], reverse=True)
-                print(f"[WIKI_IMG] Sorted images (top 3): {[{'url': i['url'][-50:], 'score': i['score']} for i in sorted_images[:3]]}")
-                if sorted_images and sorted_images[0]['score'] > 0:
-                    best_image_url = sorted_images[0]['url']; 
+                app.logger.debug(f"[WIKI_IMG] Sorted suitable images (top 3 with scores): {[{'url': i['url'][-50:], 'score': i['score']} for i in sorted_images[:3]]}")
+
+                if sorted_images and sorted_images[0]['score'] > 0: 
+                    best_image_url = sorted_images[0]['url']
                     if best_image_url.startswith("//"): best_image_url = "https:" + best_image_url
-                    print(f"[WIKI_IMG] Best image: {best_image_url} score {sorted_images[0]['score']}")
+                    app.logger.info(f"[WIKI_IMG] Best image found: {best_image_url} with score {sorted_images[0]['score']}")
                     return best_image_url
-                else: print(f"[WIKI_IMG] No image with positive score.")
-            elif wiki_page: print(f"[WIKI_IMG] No images on page.")            
+                else: 
+                    app.logger.info(f"[WIKI_IMG] No image found with positive score for '{wiki_page.title}'.")
+
+            elif wiki_page:
+                app.logger.info(f"[WIKI_IMG] No images listed on Wikipedia page: '{wiki_page.title}'")
+            
         except wikipedia.exceptions.DisambiguationError as e:
-            print(f"[WIKI_IMG] Disambiguation: {e.options[:3]}"); 
-            if e.options: new_candidate = e.options[0]; 
-            if new_candidate not in processed_search_terms and new_candidate not in search_candidates: search_candidates.append(new_candidate); print(f"[WIKI_IMG] Added disambiguation option.")
+            app.logger.warning(f"[WIKI_IMG] Disambiguation for '{term_to_search}'. Options: {e.options[:3]}")
+            if e.options:
+                new_candidate = e.options[0]
+                if new_candidate not in processed_search_terms and new_candidate not in search_candidates:
+                    search_candidates.append(new_candidate)
+                    app.logger.info(f"[WIKI_IMG] Added disambiguation option '{new_candidate}' to search candidates.")
             continue 
-        except wikipedia.exceptions.PageError: print(f"[WIKI_IMG] PageError"); continue
-        except Exception as e: print(f"[WIKI_IMG] Generic error: {e}"); traceback.print_exc(); continue            
-    print(f"[WIKI_IMG] No suitable image URL found."); return None
+        except wikipedia.exceptions.PageError:
+             app.logger.warning(f"[WIKI_IMG] Wikipedia PageError (likely after search or disambiguation) for term: '{term_to_search}'")
+             continue
+        except Exception as e:
+            app.logger.error(f"[WIKI_IMG] Generic error for '{term_to_search}': {str(e)}")
+            traceback.print_exc() 
+            continue
+            
+    app.logger.warning(f"[WIKI_IMG] No suitable Wikipedia image URL after all attempts for initial candidates.")
+    return None
 
 
-# =============================================
-# Endpoint: پیشنهاد نام علمی (راهنما)
-# =============================================
-@app.route('/api/suggest_name', methods=['GET'])
-def suggest_name_endpoint():
-    """Endpoint برای پیشنهاد نام علمی بر اساس نام رایج."""
-    common_headers = {'Access-Control-Allow-Origin': '*'}
-    query = request.args.get('query')
-    lang = request.args.get('lang', 'en') 
-    def make_response(data, status_code): return jsonify(data), status_code, common_headers
-    if not query: return make_response({"error": "Query parameter 'query' is required"}, 400)
-    if lang != 'en': return make_response({"error": "Currently only English queries are supported."}, 400)
+def _fetch_gbif_data(name_to_search, search_source="initial"):
+    """Helper function to query GBIF and parse response."""
+    params_gbif = {"name": name_to_search, "verbose": "true"}
+    data = {}
+    error_message = None
+    scientific_name_found = None
+    
+    app.logger.info(f"[GBIF_API] Querying GBIF for '{name_to_search}' (source: {search_source})")
     try:
-        suggestion = get_best_ncbi_suggestion_flexible(query) # تابع کمکی NCBI
-        if suggestion: return make_response({"query": query, "scientific_name_suggestion": suggestion}, 200)
-        else: return make_response({"query": query, "message": f"No scientific name suggestion found for '{query}'."}, 404)
-    except Exception as e: print(f"Error in suggest_name_endpoint: {e}"); traceback.print_exc(); return make_response({"error": "An internal error occurred."}, 500)
+        api_response_gbif = requests.get(GBIF_API_URL_MATCH, params=params_gbif, timeout=10)
+        api_response_gbif.raise_for_status()
+        gbif_json = api_response_gbif.json()
+        
+        if not gbif_json or gbif_json.get("matchType") == "NONE" or gbif_json.get("confidence", 0) < 30:
+            error_message = f"موجودی با نام '{name_to_search}' در GBIF پیدا نشد یا نتیجه با اطمینان کافی نبود. (منبع جستجو: {search_source})"
+            data = {"searchedName": name_to_search, "matchType": gbif_json.get("matchType", "NONE"), "confidence": gbif_json.get("confidence")}
+            app.logger.warning(f"[GBIF_API] Low confidence/no match for '{name_to_search}'. MatchType: {data.get('matchType')}, Confidence: {data.get('confidence')}")
+        else:
+            scientific_name_found = gbif_json.get("scientificName")
+            data = {
+                "scientificName": scientific_name_found,
+                "kingdom": gbif_json.get("kingdom"), "phylum": gbif_json.get("phylum"), "class": gbif_json.get("class"),
+                "order": gbif_json.get("order"), "family": gbif_json.get("family"), "genus": gbif_json.get("genus"),
+                "species": gbif_json.get("species") if gbif_json.get("speciesKey") and gbif_json.get("species") else None,
+                "usageKey": gbif_json.get("usageKey"), "confidence": gbif_json.get("confidence"),
+                "matchType": gbif_json.get("matchType"), "status": gbif_json.get("status"), "rank": gbif_json.get("rank")
+            }
+            app.logger.info(f"[GBIF_API] Success for '{name_to_search}'. ScientificName: {scientific_name_found}, Confidence: {data['confidence']}")
+            
+    except requests.exceptions.Timeout:
+        error_message = f"خطا: زمان پاسخگویی از سرور GBIF برای '{name_to_search}' بیش از حد طول کشید."
+        app.logger.error(f"[GBIF_ERR] Timeout for: {name_to_search}")
+    except requests.exceptions.HTTPError as http_err_gbif:
+        error_message = f"خطا از سرور GBIF برای '{name_to_search}': {http_err_gbif}"
+        try:
+            gbif_error_details = api_response_gbif.json() # api_response_gbif might not be defined if error is early
+            error_message += f" - پیام GBIF: {gbif_error_details.get('message', api_response_gbif.text[:100])}"
+        except: pass
+        app.logger.error(f"[GBIF_ERR] HTTPError for '{name_to_search}': {error_message}")
+    except requests.exceptions.RequestException as e_gbif_req:
+        error_message = f"خطا در ارتباط با سرور GBIF برای '{name_to_search}': {str(e_gbif_req)}"
+        app.logger.error(f"[GBIF_ERR] RequestException for '{name_to_search}': {str(e_gbif_req)}")
+    except Exception as e_gbif_generic:
+        error_message = f"یک خطای پیش‌بینی نشده داخلی در ارتباط با GBIF برای '{name_to_search}' رخ داده است."
+        app.logger.error(f"[GBIF_ERR] Generic Error for '{name_to_search}': {str(e_gbif_generic)}")
+        traceback.print_exc()
+        
+    return data, scientific_name_found, error_message
 
-# =============================================
-# Endpoint: جستجوی اصلی طبقه‌بندی
-# ** فقط route اصلی فعال است **
-# =============================================
-@app.route('/api/handler', methods=['GET', 'POST', 'OPTIONS']) 
-# @app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'OPTIONS']) # <-- کامنت شده
-# @app.route('/<path:path>', methods=['GET', 'POST', 'OPTIONS']) # <-- کامنت شده
+
+@app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'OPTIONS'])
+@app.route('/<path:path>', methods=['GET', 'POST', 'OPTIONS'])
 def main_handler(path=None):
-    """Endpoint اصلی برای جستجوی طبقه‌بندی و تصویر."""
     common_headers = {'Access-Control-Allow-Origin': '*'}
     if request.method == 'OPTIONS':
         cors_headers = {**common_headers, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '3600'}
         return ('', 204, cors_headers)
 
-    # --- گرفتن نام جستجو ---
     species_name_query = ""
     if request.method == 'GET':
         species_name_query = request.args.get('name')
     elif request.method == 'POST':
         try:
-            data_post = request.get_json(); 
-            if data_post: 
-                species_name_query = data_post.get('name')
-            else: 
-                return jsonify({"error": "درخواست نامعتبر: بدنه JSON خالی است."}), 400, common_headers
-        except Exception as e_post: 
-            print(f"Error parsing JSON body: {str(e_post)}\n{traceback.format_exc()}")
-            return jsonify({"error": f"خطا در پردازش درخواست POST: {str(e_post)}"}), 400, common_headers # <<<--- بلاک except حالا اینجاست
+            data_post = request.get_json()
+            if data_post: species_name_query = data_post.get('name')
+            else: return jsonify({"error": "درخواست نامعتبر: بدنه JSON خالی است یا قابل خواندن نیست."}), 400, common_headers
+        except Exception as e_post:
+            app.logger.error(f"Error parsing JSON body: {str(e_post)}\n{traceback.format_exc()}")
+            return jsonify({"error": f"خطا در پردازش درخواست: {str(e_post)}"}), 400, common_headers
 
     if not species_name_query:
         return jsonify({"error": "پارامتر 'name' (در آدرس یا بدنه JSON) مورد نیاز است."}), 400, common_headers
 
-    # --- جستجو در GBIF (مثل قبل) ---
-    params_gbif = {"name": species_name_query, "verbose": "true"}; classification_data = {"searchedName": species_name_query}
-    gbif_error_message = None; gbif_scientific_name = None
-    try:
-        api_response_gbif = requests.get(GBIF_API_URL_MATCH, params=params_gbif, timeout=10); api_response_gbif.raise_for_status(); data_gbif = api_response_gbif.json()
-        if not data_gbif or data_gbif.get("matchType") == "NONE" or data_gbif.get("confidence", 0) < 30: gbif_error_message = f"موجودی '{species_name_query}' در GBIF پیدا نشد."; classification_data.update({"matchType": data_gbif.get("matchType", "NONE"), "confidence": data_gbif.get("confidence")})
-        else: gbif_scientific_name = data_gbif.get("scientificName"); classification_data.update({"scientificName": gbif_scientific_name, "kingdom": data_gbif.get("kingdom"), "phylum": data_gbif.get("phylum"), "class": data_gbif.get("class"), "order": data_gbif.get("order"), "family": data_gbif.get("family"), "genus": data_gbif.get("genus"), "species": data_gbif.get("species") if data_gbif.get("speciesKey") and data_gbif.get("species") else None, "usageKey": data_gbif.get("usageKey"), "confidence": data_gbif.get("confidence"), "matchType": data_gbif.get("matchType"), "status": data_gbif.get("status"), "rank": data_gbif.get("rank")})   
-    except requests.exceptions.Timeout: gbif_error_message = "خطا: Timeout GBIF."; print(f"[GBIF_ERR] Timeout: {species_name_query}")
-    except requests.exceptions.HTTPError as http_err_gbif: gbif_error_message = f"خطا GBIF: {http_err_gbif}"; print(f"[GBIF_ERR] HTTPError: {gbif_error_message}")
-    except requests.exceptions.RequestException as e_gbif_req: gbif_error_message = f"خطا ارتباط GBIF: {e_gbif_req}"; print(f"[GBIF_ERR] RequestException: {e_gbif_req}")
-    except Exception as e_gbif_generic: gbif_error_message = "خطای داخلی GBIF."; print(f"[GBIF_ERR] Generic: {e_gbif_generic}"); traceback.print_exc()
+    app.logger.info(f"--- New request for '{species_name_query}' ---")
 
-    # --- جستجو برای تصویر در ویکی‌پدیا (مثل قبل) ---
-    wiki_image_url = get_wikipedia_image_url(species_name_query, gbif_scientific_name)
+    # --- Initial GBIF Search ---
+    classification_data, gbif_scientific_name, gbif_error_message = _fetch_gbif_data(species_name_query, search_source="initial user query")
+    classification_data["searchedName"] = species_name_query # Always include original search term
+    
+    ncbi_suggestion_used = False
+    ncbi_suggested_name_for_gbif = None
+
+    # --- If initial GBIF failed or low confidence, try NCBI suggestion ---
+    if gbif_error_message or not gbif_scientific_name: # gbif_error_message implies no scientific name
+        app.logger.info(f"[GBIF_PRIMARY_FAIL] Initial GBIF search for '{species_name_query}' was not successful. Error: {gbif_error_message}. Trying NCBI suggestion.")
+        
+        original_gbif_error = gbif_error_message # Store original error
+        original_classification_data = classification_data.copy() if classification_data else {} # Store original (failed) data
+
+        ncbi_suggested_name_for_gbif = get_best_ncbi_suggestion_flexible(species_name_query)
+        
+        if ncbi_suggested_name_for_gbif:
+            classification_data["ncbiSuggestedName"] = ncbi_suggested_name_for_gbif
+            ncbi_suggestion_used = True
+            app.logger.info(f"[NCBI_RETRY] NCBI suggested '{ncbi_suggested_name_for_gbif}'. Re-querying GBIF.")
+            
+            # --- GBIF Search with NCBI suggestion ---
+            classification_data_ncbi, gbif_scientific_name_ncbi, gbif_error_message_ncbi = _fetch_gbif_data(ncbi_suggested_name_for_gbif, search_source="NCBI suggestion")
+            
+            if gbif_scientific_name_ncbi: # Success with NCBI suggestion
+                app.logger.info(f"[GBIF_NCBI_SUCCESS] GBIF found match using NCBI suggestion: '{gbif_scientific_name_ncbi}'")
+                classification_data = classification_data_ncbi # Use new data
+                classification_data["searchedName"] = species_name_query # Ensure original search term is present
+                classification_data["ncbiSuggestedName"] = ncbi_suggested_name_for_gbif # Add NCBI name
+                gbif_scientific_name = gbif_scientific_name_ncbi # Update main scientific name
+                gbif_error_message = None # Clear previous error
+            else: # GBIF still failed even with NCBI suggestion
+                app.logger.warning(f"[GBIF_NCBI_FAIL] GBIF search failed even with NCBI suggestion '{ncbi_suggested_name_for_gbif}'. Error: {gbif_error_message_ncbi}")
+                # Revert to original error or use NCBI-related error if more specific
+                gbif_error_message = f"جستجوی اولیه ناموفق بود. پیشنهاد NCBI ({ncbi_suggested_name_for_gbif}) نیز نتیجه‌ای در GBIF نداشت. خطای GBIF برای پیشنهاد NCBI: {gbif_error_message_ncbi or 'نامشخص'}"
+                classification_data = original_classification_data # Use original failed data
+                classification_data["searchedName"] = species_name_query
+                classification_data["ncbiSuggestedName"] = ncbi_suggested_name_for_gbif
+                classification_data["ncbiSuggestionUsedButGIBFFailed"] = True
+                gbif_scientific_name = None # Ensure it's None
+        else: # NCBI found no suggestion
+            app.logger.info(f"[NCBI_NO_SUGGESTION] NCBI found no suggestion for '{species_name_query}'. Using original GBIF error.")
+            gbif_error_message = original_gbif_error # Use the original GBIF error
+            classification_data = original_classification_data
+            classification_data["searchedName"] = species_name_query
+            gbif_scientific_name = None
+            
+    # --- Wikipedia Image Search ---
+    # Uses gbif_scientific_name which might be from the NCBI-assisted GBIF search
+    wiki_image_url = get_wikipedia_image_url(species_name_query, gbif_scientific_name) 
     if wiki_image_url:
         classification_data["imageUrl"] = wiki_image_url
     
-    # --- آماده‌سازی و بازگرداندن پاسخ نهایی (مثل قبل) ---
+    # --- Prepare Final Response ---
     final_data = {k: v for k, v in classification_data.items() if v is not None}
+    if ncbi_suggestion_used:
+        final_data["ncbiSuggestionUsed"] = True
+        if ncbi_suggested_name_for_gbif: # Should always be true if ncbi_suggestion_used is true
+             final_data["ncbiOriginalSuggestion"] = ncbi_suggested_name_for_gbif
+
     if gbif_error_message and not final_data.get("scientificName"): 
-        if final_data.get("imageUrl"): final_data["gbifLookupMessage"] = gbif_error_message; return jsonify(final_data), 200, common_headers
-        return jsonify({"message": gbif_error_message, "searchedName": species_name_query}), 404, common_headers
+        # If there's an error AND no scientific name was ultimately found
+        response_payload = {"message": gbif_error_message, **final_data} # final_data might have 'searchedName', 'ncbiSuggestedName', 'imageUrl' etc.
+        if not final_data.get("imageUrl"): # If also no image, it's a more definite "not found"
+            response_payload["searchedNameOnly"] = species_name_query # ensure searchedName is there if final_data was empty
+        return jsonify(response_payload), 404, common_headers
+    
+    # If we have a scientific name, or even just an image, consider it a partial/full success
     return jsonify(final_data), 200, common_headers
+
+if __name__ == '__main__':
+    # برای تست محلی بهتر است از logger فلاسک استفاده شود
+    # app.debug = True # برای نمایش لاگ‌های دیباگ بیشتر در کنسول
+    # import logging
+    # logging.basicConfig(level=logging.DEBUG) # این هم به نمایش لاگ‌ها کمک می‌کند
+    # handler = logging.StreamHandler()
+    # handler.setLevel(logging.DEBUG)
+    # app.logger.addHandler(handler)
+    app.run(host='0.0.0.0', port=5000) # در محیط پروداکشن از Gunicorn یا مشابه استفاده کنید
