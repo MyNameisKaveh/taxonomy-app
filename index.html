@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>طبقه‌بندی موجودات</title>
+    <!-- لینک به فایل CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>جستجوی طبقه‌بندی موجودات</h1>
+            <p>نام علمی یا رایج یک موجود را وارد کنید و اطلاعات طبقه‌بندی و تصویر آن را مشاهده نمایید.</p>
+        </header>
+
+        <main>
+            <div class="search-box">
+                <input type="text" id="speciesNameInput" placeholder="مثلاً: Panthera leo یا شیر ایرانی">
+                <button id="searchButton">جستجو</button>
+            </div>
+
+            <div id="loadingIndicator" style="display: none;">
+                <p>در حال بارگذاری اطلاعات...</p>
+            </div>
+
+            <!-- محل نمایش تصویر موجود -->
+            <div id="speciesImageContainer" style="text-align: center; margin-bottom: 20px;">
+                <!-- تصویر اینجا توسط جاوااسکریپت بارگذاری می‌شود -->
+            </div>
+
+            <div id="resultsContainer">
+                <!-- نتایج جستجو اینجا نمایش داده خواهند شد -->
+            </div>
+
+            <div id="errorContainer" style="display: none; color: red;">
+                <!-- پیام‌های خطا اینجا نمایش داده خواهند شد -->
+            </div>
+        </main>
+
+        <footer>
+            <p>ساخته شده با استفاده از <a href="https://www.gbif.org/developer/summary" target="_blank">GBIF API</a></p>
+        </footer>
+    </div>
+
+    <!-- لینک به فایل جاوااسکریپت -->
+    <script src="script.js"></script>
+</body>
+</html>
