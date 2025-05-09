@@ -39,13 +39,14 @@ main {
     text-align: right;
 }
 
+/* Styles for both search boxes */
 .search-box {
     display: flex;
     gap: 10px;
     margin-bottom: 20px;
 }
 
-#speciesNameInput {
+.search-box input[type="text"] { /* Generalizing for both inputs */
     flex-grow: 1;
     padding: 10px 15px;
     border: 1px solid #ddd;
@@ -53,7 +54,7 @@ main {
     font-size: 1em;
 }
 
-#searchButton {
+.search-box button { /* Generalizing for both buttons */
     padding: 10px 20px;
     background-color: #3498db;
     color: white;
@@ -64,25 +65,104 @@ main {
     transition: background-color 0.3s ease;
 }
 
-#searchButton:hover {
+.search-box button:hover {
     background-color: #2980b9;
 }
 
-#loadingIndicator p { /* استایل برای متن "در حال بارگذاری اطلاعات..." */
+/* Suggestion Box Specific Styles */
+.suggestion-box {
+    padding: 20px;
+    background-color: #f9f9f9; /* Slightly different background */
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    margin-bottom: 25px; /* Space before the divider */
+}
+
+.suggestion-box h2 {
+    margin-top: 0;
+    color: #3b5998; /* A different color for this section's heading */
+    text-align: center;
+    margin-bottom: 15px;
+    font-size: 1.3em;
+}
+
+#suggestionLoadingIndicator p {
+    color: #007bff; /* Blue for suggestion loading */
+    text-align: center;
+    padding: 10px;
+    margin-top: 10px;
+}
+
+#suggestionResultContainer p {
+    padding: 12px 15px;
+    border-radius: 4px;
+    margin: 0;
+    text-align: center;
+}
+
+#suggestionResultContainer .suggested-name-success {
+    background-color: #d4edda; /* Bootstrap success green */
+    border: 1px solid #c3e6cb;
+    color: #155724;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#suggestionResultContainer .suggestion-message-info { /* For general info from suggestion box */
+    color: #0c5460;
+    background-color: #d1ecf1;
+    border: 1px solid #bee5eb;
+}
+
+#suggestionResultContainer .suggestion-message-error { /* For errors from suggestion box */
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+
+.copy-to-main-search-btn {
+    padding: 6px 12px;
+    background-color: #28a745; /* Green button */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    margin-right: auto; /* Pushes button to the left in RTL */
+    margin-left: 10px; /* Some space from the text */
+}
+.copy-to-main-search-btn:hover {
+    background-color: #218838;
+}
+
+/* Divider */
+.section-divider {
+    margin: 35px 0;
+    border: 0;
+    border-top: 1px solid #ccc;
+}
+
+/* Main Search Box Section Title */
+.main-search-box h2 {
+    margin-top: 0;
+    color: #2c3e50; /* Original heading color */
+    text-align: center;
+    margin-bottom: 15px;
+    font-size: 1.3em;
+}
+
+
+/* Loading Indicator for main search */
+#loadingIndicator p { 
     color: #3498db;
     text-align: center;
     padding: 15px;
     margin-top: 20px;
 }
-/* این بخش ممکن است دیگر استفاده نشود اگر loadingIndicator فقط یک p دارد*/
-/* #loadingIndicator { 
-    text-align: center;
-    padding: 15px;
-    margin-top: 20px;
-    border-radius: 4px;
-} */
 
-
+/* Error Container for main search */
 #errorContainer {
     background-color: #f8d7da;
     color: #721c24;
@@ -93,6 +173,7 @@ main {
     border-radius: 4px;
 }
 
+/* Results Container for main search */
 #resultsContainer {
     margin-top: 20px;
     padding: 15px;
@@ -129,6 +210,19 @@ main {
     margin-left: 5px;
 }
 
+/* General Info Message (can be used by main search or suggestion if needed) */
+.info-message { /* This is for the main results if showInfo is called */
+    color: #0c5460;
+    background-color: #d1ecf1;
+    border: 1px solid #bee5eb;
+    padding: 12px 15px;
+    border-radius: 4px;
+    text-align: center;
+    margin-top: 20px;
+}
+
+
+/* Footer */
 footer {
     text-align: center;
     margin-top: 30px;
@@ -147,17 +241,7 @@ footer a:hover {
     text-decoration: underline;
 }
 
-.info-message {
-    color: #0c5460;
-    background-color: #d1ecf1;
-    border: 1px solid #bee5eb;
-    padding: 12px 15px;
-    border-radius: 4px;
-    text-align: center;
-    margin-top: 20px;
-}
-
-/* Spinner styles */
+/* Spinner styles (for image loading) */
 .loader {
     border: 5px solid #f3f3f3; /* Light grey */
     border-top: 5px solid #3498db; /* Blue */
@@ -165,7 +249,7 @@ footer a:hover {
     width: 40px;
     height: 40px;
     animation: spin 1s linear infinite;
-    margin: 20px auto; /* برای وسط‌چین شدن spinner */
+    margin: 20px auto; 
 }
 
 @keyframes spin {
