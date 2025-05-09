@@ -32,7 +32,7 @@ app = Flask(__name__)
 GBIF_API_URL_MATCH = "https://api.gbif.org/v1/species/match"
 
 # !!! بسیار مهم: ایمیل واقعی خود را اینجا وارد کنید !!!
-Entrez.email = "YOUR_ACTUAL_EMAIL@example.com" 
+Entrez.email = "andolini1889@gmail.com" 
 # !!! بسیار مهم: ایمیل واقعی خود را اینجا وارد کنید !!!
 
 
