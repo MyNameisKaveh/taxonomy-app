@@ -332,38 +332,6 @@ footer a:hover {
     100% { transform: rotate(360deg); }
 }
 
-/* Featured Organism Styles */
-.featured-organism-container {
-    margin-top: 30px;
-    margin-bottom: 30px;
-    padding: 25px;
-    background-color: #E6F9F7; /* Light Teal */
-    border: 1px solid #B2DFDB; /* Slightly darker Teal border */
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    overflow: hidden; /* To contain floats */
-}
-
-.featured-organism-container h2 {
-    margin-top: 0;
-    margin-bottom: 20px;
-    color: #264653; /* Consistent section title color */
-    font-size: 1.4em;
-    text-align: center;
-}
-
-.featured-content p { /* This will target paragraphs inside .featured-content */
-    font-size: 0.95em;
-    line-height: 1.8;
-    color: #333; /* Dark gray for text */
-    text-align: justify;
-    margin-bottom: 10px; /* Space between paragraphs */
-}
-
-.featured-content p:last-child {
-    margin-bottom: 0;
-}
-
 /* Search History Styles */
 .search-history-container {
     margin-top: 30px;

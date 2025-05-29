@@ -82,45 +82,19 @@ function loadSearchHistory() {
 }
 
 function renderSearchHistory(historyArray) {
-    searchHistoryList.innerHTML = ''; // Clear existing items
-
+    searchHistoryList.innerHTML = ''; 
     if (!historyArray || historyArray.length === 0) {
         const emptyMsgLi = document.createElement('li');
         emptyMsgLi.textContent = 'تاریخچه جستجو خالی است.';
         emptyMsgLi.style.fontStyle = 'italic';
-        emptyMsgLi.style.color = '#6c757d'; // Using a muted color
+        emptyMsgLi.style.color = '#6c757d'; 
         emptyMsgLi.style.cursor = 'default';
         searchHistoryList.appendChild(emptyMsgLi);
-        clearHistoryButton.style.display = 'none'; // Hide button if history is empty
+        clearHistoryButton.style.display = 'none'; 
         return;
     }
-
-    // Slice to ensure we only render MAX_HISTORY_ITEMS, taking the newest ones (from the start of stored array)
     const itemsToRender = historyArray.slice(0, MAX_HISTORY_ITEMS);
-
-    itemsToRender.forEach(term => {
-        const li = document.createElement('li');
-        li.textContent = term;
-        li.dataset.searchTerm = term;
-        li.addEventListener('click', function() {
-            speciesNameInput.value = this.dataset.searchTerm;
-            // Optionally, scroll to top or to the input field
-            speciesNameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            performMainSearch();
-            // Moving term to top is handled by addSearchToHistory called in performMainSearch
-        });
-        searchHistoryList.appendChild(li); // Appending, so newest (from unshift) will be at the top visually if CSS is default
-                                          // If we prepend here, the order from localStorage (newest first) is maintained.
-                                          // Let's stick to addSearchToHistory unshifting, and here we iterate and append.
-                                          // This means the list will show newest at top if array is newest first.
-    });
-    
-    // Correcting display order if using appendChild: iterate reversed or prepend.
-    // Since addSearchToHistory uses unshift (adds to beginning), the historyArray is newest first.
-    // So, when appending, the oldest of the MAX_HISTORY_ITEMS will be at top.
-    // To show newest at top with appendChild, we'd iterate reversed.
-    // OR, using prepend here:
-    searchHistoryList.innerHTML = ''; // Clear again before prepending
+    searchHistoryList.innerHTML = ''; 
     itemsToRender.forEach(term => {
         const li = document.createElement('li');
         li.textContent = term;
@@ -130,23 +104,17 @@ function renderSearchHistory(historyArray) {
             speciesNameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
             performMainSearch();
         });
-        searchHistoryList.prepend(li); // Prepend to show newest items at the top
+        searchHistoryList.prepend(li); 
     });
-
-
-    clearHistoryButton.style.display = 'block'; // Show button if history is not empty
+    clearHistoryButton.style.display = 'block'; 
 }
 
 function addSearchToHistory(searchTerm) {
-    if (!searchTerm) return; // Do not add empty searches
+    if (!searchTerm) return; 
     let historyArray = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
-    
-    // Remove term if it already exists to move it to the top (most recent)
     historyArray = historyArray.filter(item => item.toLowerCase() !== searchTerm.toLowerCase());
-    
-    historyArray.unshift(searchTerm); // Add new term to the beginning (most recent)
-    historyArray = historyArray.slice(0, MAX_HISTORY_ITEMS); // Limit history size
-    
+    historyArray.unshift(searchTerm); 
+    historyArray = historyArray.slice(0, MAX_HISTORY_ITEMS); 
     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(historyArray));
     renderSearchHistory(historyArray);
 }
@@ -154,7 +122,7 @@ function addSearchToHistory(searchTerm) {
 if (clearHistoryButton) {
     clearHistoryButton.addEventListener('click', function() {
         localStorage.removeItem(HISTORY_STORAGE_KEY);
-        renderSearchHistory([]); // Render an empty list
+        renderSearchHistory([]); 
     });
 }
 
@@ -279,10 +247,11 @@ async function performMainSearch() {
 
     if (!speciesName) {
         showMainSearchError("لطفاً نام یک موجود را برای جستجوی اطلاعات وارد کنید.");
+        // featuredOrganismContainer should remain visible if input is empty, handled by showMainSearchError
         return; 
     }
     
-    addSearchToHistory(speciesName); // Add to history
+    addSearchToHistory(speciesName); 
 
     resultsContainer.innerHTML = '';
     resultsContainer.style.display = 'none';
@@ -300,7 +269,7 @@ async function performMainSearch() {
             let errorMessage = data.error || data.message || `خطای ناشناخته از سرور اصلی (کد: ${response.status})`;
             if (response.status === 404 && data.message && !data.error) {
                 if (data.imageUrl && speciesImageContainer) {
-                    displayImageForMainSearch(data);
+                    displayImageForMainSearch(data); // This might hide featured section
                     showMainSearchInfo(data.message || `اطلاعات طبقه‌بندی برای '${speciesName}' در GBIF یافت نشد یا دقت کافی نداشت. اگر نام رایج وارد کرده‌اید، سعی کنید نام علمی آن را پیدا و جستجو کنید.`);
                 } else {
                     showMainSearchInfo(data.message || `اطلاعات طبقه‌بندی برای '${speciesName}' در GBIF یافت نشد یا دقت کافی نداشت. اگر نام رایج وارد کرده‌اید، سعی کنید نام علمی آن را پیدا و جستجو کنید.`);
@@ -311,7 +280,7 @@ async function performMainSearch() {
         } else {
             if (data.imageUrl && speciesImageContainer) speciesImageContainer.innerHTML = '<div class="loader"></div>';
             else if (speciesImageContainer) speciesImageContainer.innerHTML = '';
-            displayMainSearchResults(data);
+            displayMainSearchResults(data); // This is where featured section might be hidden
         }
     } catch (error) {
         showMainSearchError(`مشکلی در ارتباط با سرور اصلی رخ داد. لطفاً اتصال اینترنت خود را بررسی کرده و دوباره تلاش کنید. (پیام سیستم: ${error.message})`);
@@ -348,16 +317,24 @@ function displayImageForMainSearch(data) {
 
 // --- Function to Display Results for Main Search ---
 function displayMainSearchResults(data) {
-    displayImageForMainSearch(data);
-    resultsContainer.innerHTML = '';
+    displayImageForMainSearch(data); // Call image display first
+    resultsContainer.innerHTML = ''; // Clear previous results
+
+    // Determine if we have actual classification details
+    const hasClassificationDetails = Object.keys(data).some(key => 
+        key !== 'imageUrl' && key !== 'searchedName' && key !== 'message' && key !== 'wikipediaSummary' && data[key] !== null && data[key] !== undefined
+    );
+
+    // Removed featuredOrganismContainer visibility logic based on hasClassificationDetails
+    
     if (data.wikipediaSummary) {
         const summaryDiv = document.createElement('div');
         summaryDiv.className = 'wiki-summary';
         summaryDiv.innerHTML = `<p><strong>خلاصه از ویکی‌پدیا:</strong></p><p>${data.wikipediaSummary}</p>`;
         resultsContainer.appendChild(summaryDiv);
     }
+
     let classificationHtmlOutput = '';
-    const hasClassificationDetails = Object.keys(data).some(key => key !== 'imageUrl' && key !== 'searchedName' && key !== 'message' && key !== 'wikipediaSummary' && data[key] !== null && data[key] !== undefined);
     if (hasClassificationDetails) {
         classificationHtmlOutput += '<h2>نتایج طبقه‌بندی:</h2><ul>';
         const displayOrder = [
@@ -375,23 +352,38 @@ function displayMainSearchResults(data) {
             }
         });
         classificationHtmlOutput += '</ul>';
+
+        // Add GBIF link if usageKey is available
+        if (data.usageKey) {
+            const gbifUrl = `https://www.gbif.org/species/${data.usageKey}`;
+            classificationHtmlOutput += `<p class="gbif-link-container"><a href="${gbifUrl}" target="_blank" rel="noopener noreferrer">مشاهده جزئیات بیشتر در GBIF</a></p>`;
+        }
+
     } else if (data.message && !data.imageUrl && !data.wikipediaSummary) {
+        // This message is typically "GBIF found no match" or similar.
+        // Featured section should be visible here.
         classificationHtmlOutput = `<p class="info-message">${data.message}</p>`;
     } else if (!data.imageUrl && !hasClassificationDetails && !data.wikipediaSummary && !data.message && data.searchedName) {
+        // This is a more generic "no detailed info found" message.
+        // Featured section should be visible here.
         classificationHtmlOutput = `<p class="info-message">اطلاعات دقیقی برای '${data.searchedName}' یافت نشد. لطفاً نام دیگری را امتحان کنید.</p>`;
     }
+    
     if (classificationHtmlOutput.trim() !== '') {
         const classificationContentDiv = document.createElement('div');
         classificationContentDiv.innerHTML = classificationHtmlOutput;
         resultsContainer.appendChild(classificationContentDiv);
     }
+
     if (resultsContainer.innerHTML.trim() !== '') resultsContainer.style.display = 'block';
     else if (!speciesImageContainer.innerHTML.includes('<img')) resultsContainer.style.display = 'none';
+    
     errorContainer.style.display = 'none';
 }
 
 // --- Function to Show Errors for Main Search ---
 function showMainSearchError(message) {
+    // Removed featuredOrganismContainer visibility logic
     errorContainer.innerHTML = `<p>${message}</p>`;
     errorContainer.style.display = 'block';
     resultsContainer.innerHTML = '';
@@ -402,6 +394,7 @@ function showMainSearchError(message) {
 
 // --- Function to Show Info Messages for Main Search (in results area) ---
 function showMainSearchInfo(message) {
+    // Removed featuredOrganismContainer visibility logic
     resultsContainer.innerHTML = `<p class="info-message">${message}</p>`;
     resultsContainer.style.display = 'block';
     errorContainer.innerHTML = '';
@@ -411,3 +404,4 @@ function showMainSearchInfo(message) {
 
 // --- Initializations ---
 loadSearchHistory(); // Load search history on page load
+// Removed featuredOrganismContainer visibility logic
