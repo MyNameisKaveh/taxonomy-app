@@ -165,6 +165,10 @@ main {
 }
 
 /* Main Search Box Section Title */
+.main-search-box {
+    position: relative; /* For positioning autocomplete suggestions */
+}
+
 .main-search-box h2 {
     margin-top: 0;
     color: #264653; /* Dark Blue/Green */
@@ -173,6 +177,57 @@ main {
     font-size: 1.3em;
 }
 
+/* Autocomplete Suggestions Container for Main Search */
+#autocompleteSuggestions {
+    display: none; /* Hidden by default, shown by JS */
+    position: absolute;
+    background-color: #FFFFFF; /* White */
+    border: 1px solid #DEE2E6; /* Light gray border, from palette */
+    border-top: none; /* Sits directly under the input field's container */
+    max-height: 200px;
+    overflow-y: auto;
+    /* 
+      Width is calc(100% - 2px) relative to .main-search-box, 
+      accounting for its own 1px left and 1px right border.
+      This makes it span the full width of the .main-search-box parent.
+    */
+    width: calc(100% - 2px); 
+    left: 0; /* Align with parent's left edge */
+    box-sizing: border-box; /* Include padding and border in the element's total width and height */
+    z-index: 1000; /* To appear above other elements */
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    border-radius: 0 0 4px 4px; /* Rounded bottom corners */
+    /*
+      The .search-box (which contains the input) is a sibling element to this one
+      in the DOM structure (both are children of .main-search-box, with #autocompleteSuggestions
+      following .search-box).
+      .search-box has margin-bottom: 20px.
+      To make #autocompleteSuggestions appear directly under the .search-box,
+      this margin needs to be counteracted.
+      Setting margin-top to -20px should pull #autocompleteSuggestions up to be flush 
+      with the bottom of .search-box.
+    */
+    margin-top: -20px; 
+}
+
+/* Individual Autocomplete Suggestion Item (assuming they are divs) */
+#autocompleteSuggestions div {
+    padding: 10px;
+    cursor: pointer;
+    font-size: 0.95em;
+    color: #212529; /* Dark Gray text, from palette */
+    border-bottom: 1px solid #E9ECEF; /* Light separator line, from palette */
+}
+
+#autocompleteSuggestions div:last-child {
+    border-bottom: none; /* No border for the last item */
+}
+
+/* Hover effect for Autocomplete Suggestion Item */
+#autocompleteSuggestions div:hover {
+    background-color: #F8F9FA; /* Light Gray hover, from palette */
+    color: #2A9D8F; /* Teal text on hover for emphasis, from palette */
+}
 
 /* Loading Indicator for main search */
 #loadingIndicator p { 
