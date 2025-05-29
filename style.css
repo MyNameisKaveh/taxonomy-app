@@ -331,3 +331,91 @@ footer a:hover {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* Featured Organism Styles */
+.featured-organism-container {
+    margin-top: 30px;
+    margin-bottom: 30px;
+    padding: 25px;
+    background-color: #E6F9F7; /* Light Teal */
+    border: 1px solid #B2DFDB; /* Slightly darker Teal border */
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    overflow: hidden; /* To contain floats */
+}
+
+.featured-organism-container h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #264653; /* Consistent section title color */
+    font-size: 1.4em;
+    text-align: center;
+}
+
+.featured-content p { /* This will target paragraphs inside .featured-content */
+    font-size: 0.95em;
+    line-height: 1.8;
+    color: #333; /* Dark gray for text */
+    text-align: justify;
+    margin-bottom: 10px; /* Space between paragraphs */
+}
+
+.featured-content p:last-child {
+    margin-bottom: 0;
+}
+
+/* Search History Styles */
+.search-history-container {
+    margin-top: 30px;
+    padding: 20px;
+    background-color: #FFFFFF; /* White background */
+    border: 1px solid #DEE2E6; /* Light gray border, consistent with other elements */
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05); /* Subtle shadow */
+}
+
+.search-history-container h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #264653; /* Dark Blue/Green, consistent with other section titles */
+    font-size: 1.2em;
+}
+
+#searchHistoryList {
+    list-style: none;
+    padding: 0;
+    margin-bottom: 15px;
+}
+
+#searchHistoryList li {
+    padding: 8px 10px;
+    cursor: pointer;
+    border-bottom: 1px dashed #E0E0E0; /* Light dashed border */
+    color: #2A9D8F; /* Primary Teal color for clickable items */
+    transition: background-color 0.2s ease;
+}
+
+#searchHistoryList li:last-child {
+    border-bottom: none;
+}
+
+#searchHistoryList li:hover {
+    background-color: #F1F1F1; /* Light hover effect */
+}
+
+#clearHistoryButton {
+    display: block; 
+    margin: 10px auto 0; /* Centered with auto margins */
+    padding: 8px 15px;
+    background-color: #6C757D; /* Secondary gray color */
+    color: white;
+    border: none;
+    border-radius: 4px; /* Standard border-radius */
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+#clearHistoryButton:hover {
+    background-color: #5a6268; /* Darker shade for hover */
+}
